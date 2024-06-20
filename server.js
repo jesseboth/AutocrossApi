@@ -49,7 +49,7 @@ app.get('/timing-data/:class?', async (req, res) => {
                     }
 
                     driver++;
-                } 
+                }
                 else {
                     temp.car = $(columns[3]).text().trim();
                     temp.offset = $(columns[4]).text().trim();
@@ -80,6 +80,19 @@ app.get('/timing-data/:class?', async (req, res) => {
 });
 
 
+
+/*
+{
+"First Last": {
+        position: 1
+        length: 0
+    }
+}
+*/
+stats = {}
+color_newTime = "#1dde9a"
+color_newPos = "#fc03f4"
+color_none = "#ffffff"
 app.get('/widget/:class?', async (req, res) => {
     const classCode = req.params.class;
     try {
@@ -119,7 +132,7 @@ app.get('/widget/:class?', async (req, res) => {
                     }
 
                     driver++;
-                } 
+                }
                 else {
                     temp.car = $(columns[3]).text().trim();
                     temp.offset = $(columns[4]).text().trim();
@@ -131,6 +144,22 @@ app.get('/widget/:class?', async (req, res) => {
 
                     driver = 0;
                     intPosition = parseInt(position)
+                    if (stats.hasOwnProperty(temp.driver)){
+                        if(intPosition < parseInt(stats[temp.driver].position)){
+                            temp.color = color_newPos;
+                        }
+                        else if(temp.times.length > stats[temp.driver]["length"]){
+                            temp.color = color_newTime;
+                        }
+                        else{
+                            temp.color = color_none;
+                        }
+
+                    }
+                    else {
+                        temp.color = color_none;
+                    }
+
                     if(intPosition <= 10){
                         results[temp.classCode][position] = {...temp}
                     }
@@ -138,6 +167,8 @@ app.get('/widget/:class?', async (req, res) => {
                         // put me in 10th if I am outisde top 10
                         results[temp.classCode]["10"] = {...temp}
                     }
+
+                    stats[temp.driver] = {"position": temp.position, "length": temp.times.length}
                     temp = {}
                 }
             }
@@ -169,20 +200,20 @@ function reset_results(widget=false){
     else {
         for(i = 0; i < classes.length; i++){
             results[classes[i]] = {
-                    "1": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "1"},
-                    "2": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "2"},
-                    "3": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "3"},
-                    "4": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "4"},
-                    "5": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "5"},
-                    "6": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "6"},
-                    "7": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "7"},
-                    "8": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "8"},
-                    "9": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "9"},
-                    "10":{"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "10"}
+                    "1": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "1", "color": "#ffffff"},
+                    "2": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "2", "color": "#ffffff"},
+                    "3": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "3", "color": "#ffffff"},
+                    "4": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "4", "color": "#ffffff"},
+                    "5": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "5", "color": "#ffffff"},
+                    "6": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "6", "color": "#ffffff"},
+                    "7": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "7", "color": "#ffffff"},
+                    "8": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "8", "color": "#ffffff"},
+                    "9": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "9", "color": "#ffffff"},
+                    "10":{"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "10", "color": "#ffffff"}
                 }
         }
     }
-    
+
     return results
 }
 
