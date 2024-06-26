@@ -148,8 +148,9 @@ app.get('/widget/:class?', async (req, res) => {
                     temp.driver = toTitleCase($(columns[3]).text().trim());
                     temp.pax = $(columns[4]).text().trim();
                     for(i = 5; i <= 8; i++){
-                        if ($(columns[i]).text().trim() !== "") {
-                            temp.times.push(simplifyTime($(columns[i]).text().trim()));
+                        simplify = simplifyTime($(columns[i]).text().trim())
+                        if (simplify !== "") {
+                            temp.times.push(simplify);
                         }
                     }
 
@@ -160,8 +161,9 @@ app.get('/widget/:class?', async (req, res) => {
                     temp.offset = $(columns[4]).text().trim();
                     if(temp.offset == ""){ temp.offset = "-" }
                     for(i = 5; i <= 8; i++){
-                        if ($(columns[i]).text().trim() !== "") {
-                            temp.times.push(simplifyTime($(columns[i]).text().trim()));
+                        simplify = simplifyTime($(columns[i]).text().trim())
+                        if (simplify !== "") {
+                            temp.times.push(simplify);
                         }
                     }
 
@@ -301,12 +303,22 @@ function toTitleCase(str) {
 }
 
 function simplifyTime(string){
+
+    split = string.split("+")
+    if(split.length > 1 && split[0] == split[1]){
+        return ""
+    }
+
     if(string.includes("OFF")){
         return "OFF"
     }
     else if(string.includes("DNF")){
         return "DNF"
     }
+    else if(string.includes("DSQ")){
+        return "DSQ"
+    }
+
 
     return string
 }
