@@ -115,6 +115,7 @@ color_upPos = "#4fb342"
 color_downPos = "#d14545"
 color_newTime = "#1fb9d1"
 color_none = "#ffffff"
+updates = 0;
 app.get('/widget/:class?', async (req, res) => {
     const classCode = req.params.class;
     try {
@@ -200,7 +201,10 @@ app.get('/widget/:class?', async (req, res) => {
                 }
             }
         });
+        updates++;
+        if(updates > 100) { updates = 0; }
         if (classCode != undefined) {
+            results[classCode]["updates"] = updates;
             res.json(results[classCode])
         }
         else {
@@ -266,7 +270,6 @@ function reset_results(widget=false){
     return results
 }
 
-fetchAndSaveWebpage();
 async function fetchAndSaveWebpage(url_local=url) {
     try {
         const response = await axios.get(url_local);
