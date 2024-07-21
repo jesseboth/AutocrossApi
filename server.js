@@ -8,8 +8,6 @@ const fs = require('fs');
 const app = express();
 const PORT = 8000;
 
-const url = 'https://live.flr-scca.com/';
-
 // Middleware for redirection
 app.use((req, res, next) => {
     if (req.path === '/') { // Checking if the request path is the root
@@ -21,94 +19,27 @@ app.use((req, res, next) => {
 
 // Schedule the task to run every Monday at 00:00
 cron.schedule('0 0 * * 1', async function() {
-    fetchAndSaveWebpage();
+    fetchAndSaveWebpage(regions["FLR"].url);
 });
 
-const classes = ["P", "S1", "S2", "T", "X", "$", "M", "N", "V", "DS"]
-
-app.get('/timing-data/:class?', async (req, res) => {
-    const classCode = req.params.class;
+// Function to read and parse the JSON file
+const getJsonData = (filePath) => {
     try {
-        const { data } = await axios.get(url);
-        const $ = cheerio.load(data);
-
-        results = reset_results();
-        let temp = {};
-
-        driver = 0
-        stop = false;
-        $('tr.rowlow, tr.rowhigh').each((index, element) => {
-            const columns = $(element).find('td');
-
-            if(!stop && $(columns[0]).text().trim() == "Raw time"){
-                stop = true;
-            }
-            else if (!stop && $(columns).length > 1){
-                if (driver % 2 === 0) {  // Even index rows contain driver information
-                    temp.times = []
-                    position = $(columns[0]).text().trim().split("T")[0];
-                    fullclass = $(columns[1]).text().trim();
-                    classes.forEach(item => {
-                        if(fullclass.startsWith(item)){
-                            temp.classCode = item;
-                        }
-                    });
-                    temp.carClass = $(columns[1]).text().trim();
-                    temp.number = $(columns[2]).text().trim();
-                    temp.driver = toTitleCase($(columns[3]).text().trim());
-                    temp.pax = $(columns[4]).text().trim();
-                    for(i = 5; i <= 8; i++){
-                        if ($(columns[i]).text().trim() !== "") {
-
-                            temp.times.push($(columns[i]).text().trim());
-                        }
-                    }
-
-                    driver++;
-                }
-                else {
-                    temp.car = $(columns[3]).text().trim();
-                    temp.offset = $(columns[4]).text().trim();
-                    for(i = 5; i <= 8; i++){
-                        if ($(columns[i]).text().trim() !== "") {
-                            temp.times.push($(columns[i]).text().trim());
-                        }
-                    }
-
-                    elem = {}
-                    elem = {...temp}
-                    results[temp.classCode].push(elem)
-                    temp = {};
-                    driver = 0;
-                }
-            }
-        });
-        if (classCode != undefined) {
-            res.json(results[classCode])
-        }
-        else {
-            res.json(results)
-        }
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Error fetching data');
+        const data = fs.readFileSync(filePath, 'utf8');
+        return JSON.parse(data);
+    } catch (err) {
+        console.error(`Error reading or parsing file: ${err}`);
+        return null;
     }
-});
+};
+const regions = getJsonData('data/regions.json');
 
+let event_stats = {};
+reset_stats(regions);
 
-
-/*
-{
-"First Last": {
-        position: 1
-        runs: 0
-    }
-}
-*/
-stats = {}
 // Schedule a task to run every Sunday at 2:30 AM
 cron.schedule('30 2 * * 0', () => {
-    stats = {}
+    reset_stats(regions);
 });
 
 color_newTime = "#d7d955"
@@ -117,105 +48,127 @@ color_downPos = "#d14545"
 color_newTime = "#1fb9d1"
 color_none = "#ffffff"
 updates = 0;
-app.get('/widget/:class?', async (req, res) => {
+app.get('/:region/:class?', async (req, res) => {
+    const region = req.params.region.toUpperCase();
     const classCode = req.params.class;
 
     try {
+        if(!regions.hasOwnProperty(region)){
+            res.status(404).send('Region not found');
+            return;
+        }
+
+        const url = regions[region].url;
+        const classes = regions[region].classes;
+        let stats = event_stats[region];
+
         const { data } = await axios.get(url);
         const $ = cheerio.load(data);
+        const liveElements = $('.live');
+        const targetElement = liveElements.eq(regions[region].data);
+        const parse = targetElement.find('tr.rowlow, tr.rowhigh');
 
-        results = reset_results(true);
+        const format = regions[region].format;
+        
+        results = reset_results(classes, true);
         let temp = {};
+        let eligible = {};
+        let valid = true;
 
-        driver = 0
-        stop = false;
-        $('tr.rowlow, tr.rowhigh').each((index, element) => {
-            const columns = $(element).find('td');
-
-            if(!stop && $(columns[0]).text().trim() == "Raw time"){
-                stop = true;
-            }
-            else if (!stop && $(columns).length > 1){
-                if (driver % 2 === 0) {
-                    temp.times = []
-                    position = $(columns[0]).text().trim().split("T")[0];
-                    temp.position = position;
-                    fullclass = $(columns[1]).text().trim();
-                    classes.forEach(item => {
-                        if(fullclass.startsWith(item)){
-                            temp.classCode = item;
+        for(index = 0; index < parse.length; index++){
+            temp = {}
+            temp.times = []
+            for(row = 0; row < format.length; row++){
+                let columns = $(parse[index]).find('td');
+                if(columns.length > 1){
+                    for(col = 0; col < columns.length; col++){
+                        element = format[row][col];
+                        if(element == null) {
+                            ;
                         }
-                    });
-
-                    if(temp.classCode != undefined){
-                        temp.carClass = $(columns[1]).text().trim().slice(temp.classCode.length);
-                        if(temp.carClass == ""){ temp.carClass = classCode }
-                    }
-                    else {
-                        console.log("Problem: ", fullclass)
-                        temp.classCode = fullclass;
-                        temp.carClass = fullclass;
-                    }
-
-                    temp.number = $(columns[2]).text().trim();
-                    temp.driver = toTitleCase($(columns[3]).text().trim());
-                    temp.pax = $(columns[4]).text().trim();
-                    for(i = 5; i <= 8; i++){
-                        simplify = simplifyTime($(columns[i]).text().trim())
-                        if (simplify !== "") {
-                            temp.times.push(simplify);
+                        else if(element == "t"){
+                            temp.times.push(simplifyTime($(columns[col]).text().trim()));
+                        }
+                        else {
+                            temp[element] = $(columns[col]).text().trim();
                         }
                     }
-
-                    driver++;
+                    if(row+1 < format.length){
+                        index++;
+                    }
                 }
                 else {
-                    temp.car = $(columns[3]).text().trim();
-                    temp.offset = $(columns[4]).text().trim();
-                    if(temp.offset == ""){ temp.offset = "-" }
-                    for(i = 5; i <= 8; i++){
-                        simplify = simplifyTime($(columns[i]).text().trim())
-                        if (simplify !== "") {
-                            temp.times.push(simplify);
-                        }
-                    }
-
-                    driver = 0;
-                    intPosition = parseInt(position)
-                    if (stats.hasOwnProperty(temp.driver)){
-                        if(intPosition < stats[temp.driver].position){
-                            temp.color = color_upPos;
-                        }
-                        else if(intPosition > stats[temp.driver].position){
-                            temp.color = color_downPos;
-                        }
-                        else if(temp.times.length > stats[temp.driver].runs){
-                            temp.color = color_newTime;
-                        }
-                        else{
-                            temp.color = color_none;
-                        }
-                    }
-                    else {
-                        temp.color = color_none;
-                    }
-
-                    if(!results.hasOwnProperty(temp.classCode)){
-                        ;
-                    }
-                    else if(intPosition <= 10){
-                        results[temp.classCode][position] = {...temp}
-                    }
-                    else if(temp.driver == "Jesse Both") {
-                        // put me in 10th if I am outisde top 10
-                        results[temp.classCode]["10"] = {...temp}
-                    }
-
-                    stats[temp.driver] = {"position": intPosition, "runs": temp.times.length}
-                    temp = {}
+                    valid = false;
+                    break;
                 }
             }
-        });
+
+            if(valid){
+                temp.driver = toTitleCase(temp.driver);
+            }
+
+            if (valid && eligibleName(temp.driver, eligible)) {
+
+                classes.forEach(item => {
+                    if(temp.carClass.startsWith(item)){
+                        temp.classCode = item;
+                    }
+                });
+                
+                if(temp.classCode != undefined){
+                    temp.carClass = (temp.carClass).slice(temp.classCode.length).toUpperCase();
+    
+                    if(temp.carClass == ""){ temp.carClass = classCode }
+                }
+                else {
+                    console.log("Problem: ", temp.carClass)
+                    temp.classCode = temp.carClass;
+                }
+
+                if(temp.offset == ""){
+                    temp.offset = "-"
+                }
+
+                temp.pax = simplifyTime(temp.pax);
+
+                temp.position = temp.position.split("T")[0];
+                intPosition = parseInt(temp.position)
+                if (stats.hasOwnProperty(temp.driver)){
+                    if(intPosition < stats[temp.driver].position){
+                        temp.color = color_upPos;
+                    }
+                    else if(intPosition > stats[temp.driver].position){
+                        temp.color = color_downPos;
+                    }
+                    else if(temp.times.length > stats[temp.driver].runs){
+                        temp.color = color_newTime;
+                    }
+                    else{
+                        temp.color = color_none;
+                    }
+                }
+                else {
+                    temp.color = color_none;
+                }
+                
+                if(!results.hasOwnProperty(temp.classCode)){
+                    ;
+                }
+                else if(intPosition <= 10){
+                    results[temp.classCode][temp.position] = {...temp}
+                }
+                else if(temp.driver == "Jesse Both") {
+                    // put me in 10th if I am outisde top 10
+                    results[temp.classCode]["10"] = {...temp}
+                }
+                stats[temp.driver] = {"position": intPosition, "runs": temp.times.length}
+                temp = {}
+            }
+            else{
+                valid = true;
+            }
+
+        };
         updates++;
         if(updates > 100) { updates = 0; }
         if (classCode != undefined) {
@@ -254,7 +207,8 @@ app.get('/archives', (req, res) => {
         let html = '';
         html += '<h1>Autocross</h1>';
         html += '<ul>';
-        html += `<li><a href="https://live.flr-scca.com">Live Timing</a></li>`;
+        html += `<li><a href="https://live.flr-scca.com">FLR</a></li>`;
+        html += `<li><a href="https://live.cny-scca.com">CNY</a></li>`;
         html += '</ul>';
         html += '<br><br>'
         html += '<h1>Archived Files</h1>';
@@ -283,7 +237,7 @@ function new_results(){
             }
 }
 
-function reset_results(widget=false){
+function reset_results(classes, widget=false){
     results = {}
 
     if(!widget){
@@ -353,7 +307,7 @@ function simplifyTime(string){
     }
 
 
-    return string
+    return string.toUpperCase()
 }
 
 function _timeCompare(time1, time2){
@@ -392,3 +346,20 @@ function timeCompare(time1, time2) {
         return time2
     }
 }
+
+function reset_stats(regions) {
+    for (const key in regions) {
+        event_stats[key] = {};
+    }
+}
+
+// Function to add a name if it doesn't already exist
+function eligibleName(name, namesObj) {
+  if (!namesObj.hasOwnProperty(name)) {
+    namesObj[name] = true;
+    return true;
+  } else {
+    return false;
+  }
+}
+

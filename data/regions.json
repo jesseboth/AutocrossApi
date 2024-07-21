@@ -1,0 +1,19 @@
+{
+  "FLR": {
+      "classes": ["P", "S1", "S2", "T", "X", "$", "M", "N", "V", "DS"],
+      "url": "https://live.flr-scca.com/",
+      "format": [
+          ["position", "carClass", "number", "driver", "pax", "t", "t", "t", "t"],
+          [null, null, null, "car", "offset", "t", "t", "t", "t"]
+      ],
+      "data": 3
+  },
+  "CNY": {
+      "classes": ["p", "s", "ns", "nm", "t", "m"],
+      "url": "https://live.cny-scca.com/",
+      "format": [
+          ["position", "carClass", "number", "driver", "car", null, "t", "t", "t", "t", "t", "t", "t", "pax", "offset"]
+      ],
+      "data": 4
+  }
+}
