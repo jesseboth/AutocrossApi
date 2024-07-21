@@ -9,10 +9,11 @@ const app = express();
 const PORT = 8000;
 
 const url = 'https://live.flr-scca.com/';
+
 // Middleware for redirection
 app.use((req, res, next) => {
     if (req.path === '/') { // Checking if the request path is the root
-        res.redirect(url);
+        res.redirect("/archives");
     } else {
         next(); // Continue to other routes if not the root
     }
@@ -23,7 +24,7 @@ cron.schedule('0 0 * * 1', async function() {
     fetchAndSaveWebpage();
 });
 
-const classes = ["P", "S1", "S2", "T", "X", "$", "M", "N", "V"]
+const classes = ["P", "S1", "S2", "T", "X", "$", "M", "N", "V", "DS"]
 
 app.get('/timing-data/:class?', async (req, res) => {
     const classCode = req.params.class;
@@ -118,6 +119,7 @@ color_none = "#ffffff"
 updates = 0;
 app.get('/widget/:class?', async (req, res) => {
     const classCode = req.params.class;
+
     try {
         const { data } = await axios.get(url);
         const $ = cheerio.load(data);
@@ -144,7 +146,17 @@ app.get('/widget/:class?', async (req, res) => {
                             temp.classCode = item;
                         }
                     });
-                    temp.carClass = $(columns[1]).text().trim().slice(temp.classCode.length);
+
+                    if(temp.classCode != undefined){
+                        temp.carClass = $(columns[1]).text().trim().slice(temp.classCode.length);
+                        if(temp.carClass == ""){ temp.carClass = classCode }
+                    }
+                    else {
+                        console.log("Problem: ", fullclass)
+                        temp.classCode = fullclass;
+                        temp.carClass = fullclass;
+                    }
+
                     temp.number = $(columns[2]).text().trim();
                     temp.driver = toTitleCase($(columns[3]).text().trim());
                     temp.pax = $(columns[4]).text().trim();
@@ -188,7 +200,10 @@ app.get('/widget/:class?', async (req, res) => {
                         temp.color = color_none;
                     }
 
-                    if(intPosition <= 10){
+                    if(!results.hasOwnProperty(temp.classCode)){
+                        ;
+                    }
+                    else if(intPosition <= 10){
                         results[temp.classCode][position] = {...temp}
                     }
                     else if(temp.driver == "Jesse Both") {
@@ -204,8 +219,13 @@ app.get('/widget/:class?', async (req, res) => {
         updates++;
         if(updates > 100) { updates = 0; }
         if (classCode != undefined) {
-            results[classCode]["updates"] = updates;
-            res.json(results[classCode])
+            if(results.hasOwnProperty(classCode)){
+                results[classCode]["updates"] = updates;
+                res.json(results[classCode])
+            }
+            else {
+                res.json(new_results())
+            }
         }
         else {
             res.json(results)
@@ -231,7 +251,13 @@ app.get('/archives', (req, res) => {
             return;
         }
 
-        let html = '<h1>Archived Files</h1>';
+        let html = '';
+        html += '<h1>Autocross</h1>';
+        html += '<ul>';
+        html += `<li><a href="https://live.flr-scca.com">Live Timing</a></li>`;
+        html += '</ul>';
+        html += '<br><br>'
+        html += '<h1>Archived Files</h1>';
         html += '<ul>';
         for (let file of files) {
             // Create a list item with a link for each file
@@ -241,6 +267,21 @@ app.get('/archives', (req, res) => {
         res.send(html);
     });
 });
+
+function new_results(){
+        return {
+                "1": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "1", "color": "#ffffff"},
+                "2": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "2", "color": "#ffffff"},
+                "3": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "3", "color": "#ffffff"},
+                "4": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "4", "color": "#ffffff"},
+                "5": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "5", "color": "#ffffff"},
+                "6": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "6", "color": "#ffffff"},
+                "7": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "7", "color": "#ffffff"},
+                "8": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "8", "color": "#ffffff"},
+                "9": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "9", "color": "#ffffff"},
+                "10":{"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "10", "color": "#ffffff"}
+            }
+}
 
 function reset_results(widget=false){
     results = {}
@@ -252,18 +293,7 @@ function reset_results(widget=false){
     }
     else {
         for(i = 0; i < classes.length; i++){
-            results[classes[i]] = {
-                    "1": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "1", "color": "#ffffff"},
-                    "2": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "2", "color": "#ffffff"},
-                    "3": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "3", "color": "#ffffff"},
-                    "4": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "4", "color": "#ffffff"},
-                    "5": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "5", "color": "#ffffff"},
-                    "6": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "6", "color": "#ffffff"},
-                    "7": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "7", "color": "#ffffff"},
-                    "8": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "8", "color": "#ffffff"},
-                    "9": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "9", "color": "#ffffff"},
-                    "10":{"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "10", "color": "#ffffff"}
-                }
+            results[classes[i]] = new_results();
         }
     }
 
