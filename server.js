@@ -107,7 +107,11 @@ color_none = "#ffffff"
 updates = 0;
 app.get('/:region/:class?', async (req, res) => {
     const region = req.params.region.toUpperCase();
-    const classCode = req.params.class.toUpperCase();
+    classCode = req.params.class;
+
+    if(classCode != undefined){
+        classCode = req.params.class.toUpperCase();
+    }
 
     try {
         if (!regions.hasOwnProperty(region)) {
@@ -178,7 +182,7 @@ app.get('/:region/:class?', async (req, res) => {
                     temp.carClass = temp.carClass.slice(currentClass.length).trim();
                 }
 
-                if (temp.offset == "") {
+                if (temp.offset == "" || temp.offset.startsWith("[-]")) {
                     temp.offset = "-"
                 }
 
