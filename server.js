@@ -35,13 +35,11 @@ const regions = getJsonData('data/regions.json');
 // Schedule the task to run every Monday at 00:00
 cron.schedule('0 0 * * 1', async function () {
     for (const key in regions) {
-        fetchAndSaveWebpage(regions[key].url, key);
+        if(regions[key].archive){
+            fetchAndSaveWebpage(regions[key].url, key);
+        }
     }
 });
-
-for (const key in regions) {
-    fetchAndSaveWebpage(regions[key].url, key);
-}
 
 let event_stats = {};
 reset_stats(regions);
@@ -142,9 +140,9 @@ app.get('/:region/:class?', async (req, res) => {
             temp.times = []
             for (row = 0; row < format.length; row++) {
                 let columns = $(parse[index]).find('td');
-                let test = $(parse[index]).find('th');
-                if(test.length > 0){
-                    currentClass = $(test).text().trim().split(" ")[0].toUpperCase();
+                let classElem = $(parse[index]).find('th');
+                if(classElem.length > 0){
+                    currentClass = $(classElem).text().trim().split(" ")[0].toUpperCase();
                     results[currentClass] = new_results();
                 }
                 if (currentClass != "" && columns.length > 1) {
@@ -331,6 +329,10 @@ function toTitleCase(str) {
 }
 
 function simplifyTime(_string) {
+    if(_string == undefined){
+        return "999.99";
+    }
+
     string = _string.toUpperCase()
 
     split = string.split("+")

@@ -1,6 +1,7 @@
 {
   "FLR": {
       "url": "https://live.flr-scca.com/",
+      "archive": true,
       "format": [
           ["position", "carClass", "number", "driver", "pax", "t", "t", "t", "t"],
           [null, null, null, "car", "offset", "t", "t", "t", "t"]
@@ -9,6 +10,7 @@
   },
   "CNY": {
       "url": "https://live.cny-scca.com/",
+      "archive": true,
       "format": [
           ["position", "carClass", "number", "driver", "car", null, "t", "t", "t", "t", "t", "t", "t", "pax", "offset"]
       ],
@@ -17,6 +19,7 @@
   },
   "WNY": {
     "url": "https://live.wny-scca.com/",
+    "archive": true,
     "format": [
         ["position", "carClass", "number", "driver", "pax", "t", "t", "t", "t"],
         [null, null, null, "car", "offset", "t", "t", "t", "t"]
