@@ -2,114 +2,97 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const cron = require('node-cron');
-const e = require('express');
 const fs = require('fs');
+const fsp = require('fs').promises;
 
 const app = express();
 const PORT = 8000;
 
-const url = 'https://live.flr-scca.com/';
-
 // Middleware for redirection
 app.use((req, res, next) => {
     if (req.path === '/') { // Checking if the request path is the root
-        res.redirect("/archives");
+        res.redirect("/archive");
     } else {
         next(); // Continue to other routes if not the root
     }
 });
 
-// Schedule the task to run every Monday at 00:00
-cron.schedule('0 0 * * 1', async function() {
-    fetchAndSaveWebpage();
-});
-
-const classes = ["P", "S1", "S2", "T", "X", "$", "M", "N", "V", "DS"]
-
-app.get('/timing-data/:class?', async (req, res) => {
-    const classCode = req.params.class;
+// Function to read and parse the JSON file
+const getJsonData = (filePath) => {
     try {
-        const { data } = await axios.get(url);
-        const $ = cheerio.load(data);
+        const data = fs.readFileSync(filePath, 'utf8');
+        return JSON.parse(data);
+    } catch (err) {
+        console.error(`Error reading or parsing file: ${err}`);
+        return null;
+    }
+};
+const regions = getJsonData('data/regions.json');
 
-        results = reset_results();
-        let temp = {};
-
-        driver = 0
-        stop = false;
-        $('tr.rowlow, tr.rowhigh').each((index, element) => {
-            const columns = $(element).find('td');
-
-            if(!stop && $(columns[0]).text().trim() == "Raw time"){
-                stop = true;
-            }
-            else if (!stop && $(columns).length > 1){
-                if (driver % 2 === 0) {  // Even index rows contain driver information
-                    temp.times = []
-                    position = $(columns[0]).text().trim().split("T")[0];
-                    fullclass = $(columns[1]).text().trim();
-                    classes.forEach(item => {
-                        if(fullclass.startsWith(item)){
-                            temp.classCode = item;
-                        }
-                    });
-                    temp.carClass = $(columns[1]).text().trim();
-                    temp.number = $(columns[2]).text().trim();
-                    temp.driver = toTitleCase($(columns[3]).text().trim());
-                    temp.pax = $(columns[4]).text().trim();
-                    for(i = 5; i <= 8; i++){
-                        if ($(columns[i]).text().trim() !== "") {
-
-                            temp.times.push($(columns[i]).text().trim());
-                        }
-                    }
-
-                    driver++;
-                }
-                else {
-                    temp.car = $(columns[3]).text().trim();
-                    temp.offset = $(columns[4]).text().trim();
-                    for(i = 5; i <= 8; i++){
-                        if ($(columns[i]).text().trim() !== "") {
-                            temp.times.push($(columns[i]).text().trim());
-                        }
-                    }
-
-                    elem = {}
-                    elem = {...temp}
-                    results[temp.classCode].push(elem)
-                    temp = {};
-                    driver = 0;
-                }
-            }
-        });
-        if (classCode != undefined) {
-            res.json(results[classCode])
+// Schedule the task to run every Monday at 00:00
+cron.schedule('0 0 * * 1', async function () {
+    for (const key in regions) {
+        if(regions[key].archive){
+            fetchAndSaveWebpage(regions[key].url, key);
         }
-        else {
-            res.json(results)
-        }
-    } catch (error) {
-        console.error(error);
-        res.status(500).send('Error fetching data');
     }
 });
 
+let event_stats = {};
+reset_stats(regions);
 
-
-/*
-{
-"First Last": {
-        position: 1
-        runs: 0
-    }
-}
-*/
-stats = {}
 // Schedule a task to run every Sunday at 2:30 AM
 cron.schedule('30 2 * * 0', () => {
-    stats = {}
+    reset_stats(regions);
 });
+
+app.use(express.static('public')); // Serve static files from the public directory
+app.use('/archive', express.static("archive")); // Serve static files from the archive directory
+app.use('/archiveOther', express.static("archiveOther")); // Serve static files from the archive directory
+
+// Route to list all archived files
+app.get('/archive', async (req, res) => {
+    let html = '';
+    html += '<h1>Autocross</h1>';
+    html += '<ul>';
+    for (let region in regions) {
+        html += `<li><a href="${regions[region].url}">${region}</a></li>`;
+        html += `<br>`;
+    }
+    html += '</ul>';
+    html += '<br><br>';
+    html += '<h1>Archived Files</h1>';
+    html += '<ul>';
+
+    try {
+        let files = await fsp.readdir("archive");
+        for (let file of files) {
+            html += `<li><a href="/archive/${file}">${file}</a></li>`;
+        }
+    } catch (err) {
+        res.status(500).send('Failed to read archive directory');
+        return;
+    }
+
+    html += '</ul>';
+    html += '<h1>Other Archived Files</h1>';
+    html += '<ul>';
+
+    try {
+        let files = await fsp.readdir("archiveOther");
+        for (let file of files) {
+            html += `<li><a href="/archiveOther/${file}">${file}</a></li>`;
+        }
+    } catch (err) {
+        res.status(500).send('Failed to read archiveOther directory');
+        return;
+    }
+
+    html += '</ul>';
+
+    res.send(html);
+});
+
 
 color_newTime = "#d7d955"
 color_upPos = "#4fb342"
@@ -117,109 +100,134 @@ color_downPos = "#d14545"
 color_newTime = "#1fb9d1"
 color_none = "#ffffff"
 updates = 0;
-app.get('/widget/:class?', async (req, res) => {
-    const classCode = req.params.class;
+app.get('/:region/:class?', async (req, res) => {
+    const region = req.params.region.toUpperCase();
+    classCode = req.params.class;
+
+    if(classCode != undefined){
+        classCode = req.params.class.toUpperCase();
+    }
 
     try {
+        if (!regions.hasOwnProperty(region)) {
+            res.status(404).send('Region not found');
+            return;
+        }
+
+        const url = regions[region].url;
+        let stats = event_stats[region];
+
         const { data } = await axios.get(url);
         const $ = cheerio.load(data);
+        const liveElements = $(regions[region].data.element);
+        const targetElement = liveElements.eq(regions[region].data.offset);
+        const parse = targetElement.find('tr.rowlow, tr.rowhigh, th');
 
-        results = reset_results(true);
+
+        const format = regions[region].format;
+
+        results = {};
         let temp = {};
+        let eligible = {};
+        let valid = true;
+        let currentClass = "";
 
-        driver = 0
-        stop = false;
-        $('tr.rowlow, tr.rowhigh').each((index, element) => {
-            const columns = $(element).find('td');
-
-            if(!stop && $(columns[0]).text().trim() == "Raw time"){
-                stop = true;
-            }
-            else if (!stop && $(columns).length > 1){
-                if (driver % 2 === 0) {
-                    temp.times = []
-                    position = $(columns[0]).text().trim().split("T")[0];
-                    temp.position = position;
-                    fullclass = $(columns[1]).text().trim();
-                    classes.forEach(item => {
-                        if(fullclass.startsWith(item)){
-                            temp.classCode = item;
+        for (index = 0; index < parse.length; index++) {
+            temp = {}
+            temp.times = []
+            for (row = 0; row < format.length; row++) {
+                let columns = $(parse[index]).find('td');
+                let classElem = $(parse[index]).find('th');
+                if(classElem.length > 0){
+                    currentClass = $(classElem).text().trim().split(" ")[0].toUpperCase();
+                    results[currentClass] = new_results();
+                }
+                if (currentClass != "" && columns.length > 1) {
+                    for (col = 0; col < columns.length; col++) {
+                        element = format[row][col];
+                        if (element == null) {
+                            ;
                         }
-                    });
-
-                    if(temp.classCode != undefined){
-                        temp.carClass = $(columns[1]).text().trim().slice(temp.classCode.length);
-                        if(temp.carClass == ""){ temp.carClass = classCode }
-                    }
-                    else {
-                        console.log("Problem: ", fullclass)
-                        temp.classCode = fullclass;
-                        temp.carClass = fullclass;
-                    }
-
-                    temp.number = $(columns[2]).text().trim();
-                    temp.driver = toTitleCase($(columns[3]).text().trim());
-                    temp.pax = $(columns[4]).text().trim();
-                    for(i = 5; i <= 8; i++){
-                        simplify = simplifyTime($(columns[i]).text().trim())
-                        if (simplify !== "") {
-                            temp.times.push(simplify);
+                        else if (element == "t") {
+                            temp.times.push(simplifyTime($(columns[col]).text().trim()));
+                        }
+                        else {
+                            temp[element] = $(columns[col]).text().trim();
                         }
                     }
-
-                    driver++;
+                    if (row + 1 < format.length) {
+                        index++;
+                    }
                 }
                 else {
-                    temp.car = $(columns[3]).text().trim();
-                    temp.offset = $(columns[4]).text().trim();
-                    if(temp.offset == ""){ temp.offset = "-" }
-                    for(i = 5; i <= 8; i++){
-                        simplify = simplifyTime($(columns[i]).text().trim())
-                        if (simplify !== "") {
-                            temp.times.push(simplify);
-                        }
-                    }
+                    valid = false;
+                    break;
+                }
+            }
 
-                    driver = 0;
-                    intPosition = parseInt(position)
-                    if (stats.hasOwnProperty(temp.driver)){
-                        if(intPosition < stats[temp.driver].position){
-                            temp.color = color_upPos;
-                        }
-                        else if(intPosition > stats[temp.driver].position){
-                            temp.color = color_downPos;
-                        }
-                        else if(temp.times.length > stats[temp.driver].runs){
-                            temp.color = color_newTime;
-                        }
-                        else{
-                            temp.color = color_none;
-                        }
+            if (valid) {
+                temp.driver = toTitleCase(temp.driver);
+            }
+
+            if (valid && eligibleName(temp.driver, eligible)) {
+
+                temp.classCode = currentClass;
+                temp.carClass = temp.carClass.toUpperCase();
+                if(temp.carClass.startsWith(currentClass)){
+                    temp.carClass = temp.carClass.slice(currentClass.length).trim();
+                }
+
+                if (temp.offset == "" || temp.offset.startsWith("[-]")) {
+                    temp.offset = "-"
+                }
+
+                temp.pax = simplifyTime(temp.pax);
+
+                temp.position = temp.position.split("T")[0];
+                intPosition = parseInt(temp.position)
+                if (stats.hasOwnProperty(temp.driver)) {
+                    if (intPosition < stats[temp.driver].position) {
+                        temp.color = color_upPos;
+                    }
+                    else if (intPosition > stats[temp.driver].position) {
+                        temp.color = color_downPos;
+                    }
+                    else if (temp.times.length > stats[temp.driver].runs) {
+                        temp.color = color_newTime;
                     }
                     else {
                         temp.color = color_none;
                     }
-
-                    if(!results.hasOwnProperty(temp.classCode)){
-                        ;
-                    }
-                    else if(intPosition <= 10){
-                        results[temp.classCode][position] = {...temp}
-                    }
-                    else if(temp.driver == "Jesse Both") {
-                        // put me in 10th if I am outisde top 10
-                        results[temp.classCode]["10"] = {...temp}
-                    }
-
-                    stats[temp.driver] = {"position": intPosition, "runs": temp.times.length}
-                    temp = {}
                 }
+                else {
+                    temp.color = color_none;
+                }
+
+                runs = temp.times.length;
+                temp.times = beautifyTimes(temp.times, findBestTimeIndex(temp.times));
+
+                if (!results.hasOwnProperty(temp.classCode)) {
+                    ;
+                }
+                else if (intPosition <= 10) {
+                    results[temp.classCode][temp.position] = { ...temp }
+                }
+                else if (temp.driver == "Jesse Both") {
+                    // put me in 10th if I am outisde top 10
+                    results[temp.classCode]["10"] = { ...temp }
+                }
+                stats[temp.driver] = { "position": intPosition, "runs": runs }
+                temp = {}
             }
-        });
+            else {
+                valid = true;
+            }
+
+        };
         updates++;
-        if(updates > 100) { updates = 0; }
+        if (updates > 100) { updates = 0; }
         if (classCode != undefined) {
-            if(results.hasOwnProperty(classCode)){
+            if (results.hasOwnProperty(classCode)) {
                 results[classCode]["updates"] = updates;
                 res.json(results[classCode])
             }
@@ -240,59 +248,31 @@ app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
 
-app.use(express.static('public')); // Serve static files from the public directory
-app.use('/archives', express.static("archive")); // Serve static files from the archive directory
-
-// Route to list all archived files
-app.get('/archives', (req, res) => {
-    fs.readdir("archive", (err, files) => {
-        if (err) {
-            res.status(500).send('Failed to read archive directory');
-            return;
-        }
-
-        let html = '';
-        html += '<h1>Autocross</h1>';
-        html += '<ul>';
-        html += `<li><a href="https://live.flr-scca.com">Live Timing</a></li>`;
-        html += '</ul>';
-        html += '<br><br>'
-        html += '<h1>Archived Files</h1>';
-        html += '<ul>';
-        for (let file of files) {
-            // Create a list item with a link for each file
-            html += `<li><a href="/archives/${file}">${file}</a></li>`;
-        }
-        html += '</ul>';
-        res.send(html);
-    });
-});
-
-function new_results(){
-        return {
-                "1": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "1", "color": "#ffffff"},
-                "2": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "2", "color": "#ffffff"},
-                "3": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "3", "color": "#ffffff"},
-                "4": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "4", "color": "#ffffff"},
-                "5": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "5", "color": "#ffffff"},
-                "6": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "6", "color": "#ffffff"},
-                "7": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "7", "color": "#ffffff"},
-                "8": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "8", "color": "#ffffff"},
-                "9": {"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "9", "color": "#ffffff"},
-                "10":{"driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": [], "position": "10", "color": "#ffffff"}
-            }
+function new_results() {
+    return {
+        "1": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "1", "color": "#ffffff" },
+        "2": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "2", "color": "#ffffff" },
+        "3": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "3", "color": "#ffffff" },
+        "4": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "4", "color": "#ffffff" },
+        "5": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "5", "color": "#ffffff" },
+        "6": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "6", "color": "#ffffff" },
+        "7": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "7", "color": "#ffffff" },
+        "8": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "8", "color": "#ffffff" },
+        "9": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "9", "color": "#ffffff" },
+        "10": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "color": "#ffffff" }
+    }
 }
 
-function reset_results(widget=false){
+function reset_results(classes, widget = false) {
     results = {}
 
-    if(!widget){
-        for(i = 0; i < classes.length; i++){
+    if (!widget) {
+        for (i = 0; i < classes.length; i++) {
             results[classes[i]] = []
         }
     }
     else {
-        for(i = 0; i < classes.length; i++){
+        for (i = 0; i < classes.length; i++) {
             results[classes[i]] = new_results();
         }
     }
@@ -300,27 +280,37 @@ function reset_results(widget=false){
     return results
 }
 
-async function fetchAndSaveWebpage(url_local=url) {
+function getYesterdate() {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+
+    const month = String(yesterday.getMonth() + 1).padStart(2, '0');
+    const day = String(yesterday.getDate()).padStart(2, '0');
+    const year = yesterday.getFullYear();
+
+    return `${month}-${day}-${year}`;
+}
+
+async function fetchAndSaveWebpage(local_url, region) {
     try {
-        const response = await axios.get(url_local);
+        const response = await axios.get(local_url);
         const htmlContent = response.data;
 
-        // Use the updated regular expression to extract the date
-        const eventRegex = /Finger Lakes Region SCCA - #\d+ - Event \d+ - (\d{1,2}\/\d{1,2}\/\d{2})/;
-        const match = htmlContent.match(eventRegex);
-
-        // Set a default filename in case no match is found
-        let filename = 'default_filename.html';
-
-        // If a match is found, use the date to create a filename
-        if (match) {
-            // Replace slashes with underscores to create a valid filename
-            let event = match[0].replace(/\//g, '-');
-            event = event.replace(/ /g, '_');
-            event = event.replace(/#/g, '');
-            filename = `${event}.html`;
-            filename = "archive/"+ filename;
+        filepath = "archiveOther/"
+        if(htmlContent.includes("Jesse Both")){
+            filepath = "archive/"
         }
+
+        const regex = /Live Results - Generated:\s*\w+ (\d{2}-\d{2}-\d{4}) \d{2}:\d{2}:\d{2}/;
+        const match = htmlContent.match(regex);
+
+        date = "fixme-"+getYesterdate();
+        if (match) {
+            date = match[1];
+        }
+
+        const filename = filepath+`${region}_${date}.html`;
 
         // Write the HTML content to a file
         fs.writeFileSync(filename, htmlContent, 'utf8');
@@ -330,65 +320,102 @@ async function fetchAndSaveWebpage(url_local=url) {
 }
 
 function toTitleCase(str) {
-    return str.toLowerCase().split(' ').map(function(word) {
+    return str.toLowerCase().split(' ').map(function (word) {
         return word.charAt(0).toUpperCase() + word.slice(1);
     }).join(' ');
 }
 
-function simplifyTime(string){
+function simplifyTime(_string) {
+    if(_string == undefined){
+        return "999.99";
+    }
+
+    string = _string.toUpperCase()
 
     split = string.split("+")
-    if(split.length > 1 && split[0] == split[1]){
+    if (split.length > 1 && split[0] == split[1]) {
         return ""
     }
 
-    if(string.includes("OFF")){
+    if (string.includes("OFF")) {
         return "OFF"
     }
-    else if(string.includes("DNF")){
+    else if (string.includes("DNF")) {
         return "DNF"
     }
-    else if(string.includes("DSQ")){
+    else if (string.includes("DSQ")) {
         return "DSQ"
     }
-
 
     return string
 }
 
-function _timeCompare(time1, time2){
+function beautifyTimes(times, bestIdx) {
+    for (i = 0; i < times.length; i++) {
+        split = times[i].split("+")
+        if(split.length > 1){
+            split[1] = split[1] + "[/c]"
+        }
+        if(i == bestIdx){
+            split[0] = "[b][c=#ff54ccff]" + split[0] + "[/c][/b]"
+        }
+        times[i] = split.join("[c=#ffff0000]+")
+
+    }
+    retval = times.join('   ').trim();
+    if(retval == "") { retval = " " }
+    return retval;
 
 }
 
-function timeCompare(time1, time2) {
-    let t1 = time1.split("+");
-    let t2 = time2.split("+");
-
-    if(t1.length < t2.length){
-        return time1
-    }
-    else if(t2.length > t1.length){
-        return time2
+function convertToSeconds(time) {
+    if (time == "", time.includes('DNF') || time.includes('OFF') || time.includes('DSQ')) {
+        return Infinity;
     }
 
+    const parts = time.split('+');
+    const baseTime = parseFloat(parts[0]);
 
-    // DSQ
-    // OFF
-
-    float_time1 = parseFloat(time1[0])
-    float_time2 = parseFloat(time2[0])
-
-    if (time1.length > 1) {
-        float_time1 += (parseFloat(time1[1]) * 2)
-    }
-    if (time2.length > 1) {
-        float_time2 += (parseFloat(time2[1]) * 2)
+    if (parts.length > 1) {
+        if (parts[1] === 'OFF' || parts[1] === 'DSQ' || parts[1] === 'DNF') {
+            return Infinity;
+        }
+        const penalties = parseInt(parts[1], 10);
+        return baseTime + (penalties * 2);
     }
 
-    if(float_time1 < float_time2) {
-        return time1
+    return baseTime;
+}
+
+function findBestTimeIndex(times) {
+    let bestTimeIndex = -1;
+    let bestTime = Infinity;
+
+    for (let i = 0; i < times.length; i++) {
+        const adjustedTime = convertToSeconds(times[i]);
+
+        if (adjustedTime < bestTime) {
+            bestTime = adjustedTime;
+            bestTimeIndex = i;
+        }
     }
-    else {
-        return time2
+
+    return bestTimeIndex;
+}
+
+function reset_stats(regions) {
+    for (const key in regions) {
+        event_stats[key] = {};
     }
 }
+
+// Function to add a name if it doesn't already exist
+function eligibleName(name, namesObj) {
+    if (!namesObj.hasOwnProperty(name)) {
+        namesObj[name] = true;
+        return true;
+    } else {
+        return false;
+    }
+}
+

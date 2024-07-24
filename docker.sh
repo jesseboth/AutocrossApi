@@ -5,7 +5,9 @@ CONTAINERNAME="${IMAGENAME}-container"
 PORT="8001"
 
 SCRIPT_DIR=$(realpath $(dirname "$0"))
-VOLUMES="-v ${SCRIPT_DIR}/archive:/usr/src/app/archive"
+VOLUMES="-v ${SCRIPT_DIR}/archive:/usr/src/app/archive \
+         -v ${SCRIPT_DIR}/archiveOther:/usr/src/app/archiveOther \
+"
 
 if [ "$1" == "daemon" ]; then
   docker build -t "$IMAGENAME" .
