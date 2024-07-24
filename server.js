@@ -2,11 +2,8 @@ const express = require('express');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const cron = require('node-cron');
-const e = require('express');
 const fs = require('fs');
 const fsp = require('fs').promises;
-const { isDataView } = require('util/types');
-const path = require('path');
 
 const app = express();
 const PORT = 8000;
