@@ -359,7 +359,7 @@ function beautifyTimes(times, bestIdx) {
         if(i == bestIdx){
             split[0] = "[b][c=#ff54ccff]" + split[0] + "[/c][/b]"
         }
-        times[i] = split.join("[c=#ffff0000]+")
+        times[i] = split.join("[c=#ffde6868]+")
 
     }
     retval = times.join('   ').trim();
