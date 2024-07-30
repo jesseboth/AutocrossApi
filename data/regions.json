@@ -1,6 +1,7 @@
 {
   "FLR": {
       "url": "https://live.flr-scca.com/",
+      "software": "axware",
       "archive": true,
       "format": [
           ["position", "carClass", "number", "driver", "pax", "t", "t", "t", "t"],
@@ -10,20 +11,45 @@
   },
   "CNY": {
       "url": "https://live.cny-scca.com/",
+      "software": "axware",
       "archive": true,
       "format": [
-          ["position", "carClass", "number", "driver", "car", null, "t", "t", "t", "t", "t", "t", "t", "pax", "offset"]
+          ["position", "carClass", "number", "driver", "car", null, "t-2", "pax", "offset"]
       ],
       "data": { "element":".live", "offset": 4 }
 
   },
   "WNY": {
     "url": "https://live.wny-scca.com/",
+    "software": "axware",
     "archive": true,
     "format": [
         ["position", "carClass", "number", "driver", "pax", "t", "t", "t", "t"],
         [null, null, null, "car", "offset", "t", "t", "t", "t"]
     ],
     "data": { "element":"table", "offset": 3 }
-}
+},
+"MBR": {
+    "url": "https://www.mbrscca.com/live/",
+    "software": "pronto",
+    "archive": false,
+    "format": [
+        [null, "position", "number", "driver", "car", null],
+        [null, "carClass", null, "t",  "t", "t", null, "pax"],
+        [null, null, null, "t", "t", "t", null, "offset"],
+        [null, null, null, "t", "t", "t", null, null]
+    ],
+    "data": { "element":"table", "offset": 1 }
+  },
+  "TOUR": {
+    "url": "https://sololive.scca.com/",
+    "software": "pronto",
+    "archive": false,
+    "format": [
+        [null, "position", "number", "driver", "car", null],
+        [null, null, null, "t",  "t", "t", null, "pax"],
+        [null, null, null, "t", "t", "t", null, "offset"]
+    ],
+    "data": { "element":"table", "offset": 1 }
+  }
 }
