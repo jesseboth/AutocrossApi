@@ -110,7 +110,9 @@ app.get('/:region/:class?', async (req, res) => {
 
     try {
         if (!regions.hasOwnProperty(region)) {
-            res.status(404).send('Region not found');
+            ret = new_results();
+            ret["1"].driver = "Region not found";
+            res.json(ret);
             return;
         }
 
@@ -123,12 +125,16 @@ app.get('/:region/:class?', async (req, res) => {
             res.json(await pronto(region, region_dict, classCode));
         }
         else {
-            res.status(404).send('Timing Software not defined');
+            ret = new_results();
+            ret["1"].driver = "Timing Software not defined";
+            res.json(ret);
             return;
         }
     } catch (error) {
         console.error(error);
-        res.status(500).send('Error fetching data');
+        ret = new_results();
+        ret["1"].driver = "Error fetching data";
+        res.json(ret);
     }
 });
 
@@ -142,7 +148,9 @@ app.get('/tour/:region/:class?', async (req, res) => {
 
     try {
         if (!regions.hasOwnProperty("TOUR")) {
-            res.status(404).send('Region not found');
+            ret = new_results();
+            ret["1"].driver = "Region not found";
+            res.json(ret);
             return;
         }
 
@@ -156,12 +164,16 @@ app.get('/tour/:region/:class?', async (req, res) => {
             res.json(await pronto("TOUR", region_dict, classCode));
         }
         else {
-            res.status(404).send('Timing Software not defined');
+            ret = new_results();
+            ret["1"].driver = "Timing Software not defined";
+            res.json(ret);
             return;
         }
     } catch (error) {
         console.error(error);
-        res.status(500).send('Error fetching data');
+        ret = new_results();
+        ret["1"].driver = "Error fetching data";
+        res.json(ret);
     }
 });
 
