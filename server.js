@@ -110,21 +110,91 @@ app.get('/:region/:class?', async (req, res) => {
 
     try {
         if (!regions.hasOwnProperty(region)) {
-            res.status(404).send('Region not found');
+            ret = new_results();
+            ret["1"].driver = "Region not found";
+            res.json(ret);
             return;
         }
 
-        const url = regions[region].url;
-        let stats = event_stats[region];
+        const region_dict = regions[region];
 
+        if(region_dict.software == "axware"){
+            res.json(await axware(region, region_dict, classCode));
+        }
+        else if(region_dict.software == "pronto"){
+            res.json(await pronto(region, region_dict, classCode));
+        }
+        else {
+            ret = new_results();
+            ret["1"].driver = "Timing Software not defined";
+            res.json(ret);
+            return;
+        }
+    } catch (error) {
+        console.error(error);
+        ret = new_results();
+        ret["1"].driver = "Error fetching data";
+        res.json(ret);
+    }
+});
+
+app.get('/tour/:region/:class?', async (req, res) => {
+    const region = req.params.region.toUpperCase();
+    classCode = req.params.class;
+
+    if(classCode != undefined){
+        classCode = req.params.class.toUpperCase();
+    }
+
+    try {
+        if (!regions.hasOwnProperty("TOUR")) {
+            ret = new_results();
+            ret["1"].driver = "Region not found";
+            res.json(ret);
+            return;
+        }
+
+        let region_dict = { ...regions["TOUR"] };
+        region_dict.url = region_dict.url + region + "/";
+
+        if(region_dict.software == "axware"){
+            res.json(await axware(region, region_dict, classCode));
+        }
+        else if(region_dict.software == "pronto"){
+            res.json(await pronto("TOUR", region_dict, classCode));
+        }
+        else {
+            ret = new_results();
+            ret["1"].driver = "Timing Software not defined";
+            res.json(ret);
+            return;
+        }
+    } catch (error) {
+        console.error(error);
+        ret = new_results();
+        ret["1"].driver = "Error fetching data";
+        res.json(ret);
+    }
+});
+
+
+app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+});
+
+async function axware(region_name, region, classCode) {
+    const url = region.url;
+    let stats = event_stats[region_name];
+
+    try {
         const { data } = await axios.get(url);
         const $ = cheerio.load(data);
-        const liveElements = $(regions[region].data.element);
-        const targetElement = liveElements.eq(regions[region].data.offset);
+        const liveElements = $(region.data.element);
+        const targetElement = liveElements.eq(region.data.offset);
         const parse = targetElement.find('tr.rowlow, tr.rowhigh, th');
 
 
-        const format = regions[region].format;
+        const format = region.format;
 
         results = {};
         let temp = {};
@@ -143,13 +213,20 @@ app.get('/:region/:class?', async (req, res) => {
                     results[currentClass] = new_results();
                 }
                 if (currentClass != "" && columns.length > 1) {
+                    let format_offset = 0;
                     for (col = 0; col < columns.length; col++) {
-                        element = format[row][col];
-                        if (element == null) {
+                        element = format[row][col-format_offset];
+                        if (element == null || element == undefined) {
                             ;
                         }
                         else if (element == "t") {
                             temp.times.push(simplifyTime($(columns[col]).text().trim()));
+                        }
+                        else if (element.startsWith("t-")) {
+                            const before = parseInt(element.split("-")[1]);
+                            for (col; col < columns.length-before-1; col++, format_offset++) {
+                                temp.times.push(simplifyTime($(columns[col]).text().trim()));
+                            }
                         }
                         else {
                             temp[element] = $(columns[col]).text().trim();
@@ -229,24 +306,175 @@ app.get('/:region/:class?', async (req, res) => {
         if (classCode != undefined) {
             if (results.hasOwnProperty(classCode)) {
                 results[classCode]["updates"] = updates;
-                res.json(results[classCode])
+                return results[classCode]
             }
             else {
-                res.json(new_results())
+                return new_results()
             }
         }
         else {
-            res.json(results)
+            return results
         }
     } catch (error) {
-        console.error(error);
-        res.status(500).send('Error fetching data');
-    }
-});
+        console.log(error)
+        err = error.stack.split('\n')[0].split(':');
+        results = new_results();
+        results["1"].driver =  err[0];
+        results["1"].number = error.response ? error.response.status : '-1';
+        results["1"].times = err[1];
+        results["1"].color = color_downPos;
 
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
+        return results;
+    }
+}
+
+async function pronto(region_name, region, classCode) {
+    const url = region.url + classCode + ".php";
+    let stats = event_stats[region_name];
+
+    try {
+        const { data } = await axios.get(url);
+        const $ = cheerio.load(data);
+        const liveElements = $(region.data.element);
+        const targetElement = liveElements.eq(region.data.offset);
+        const parse = targetElement.find('tr');
+
+        const format = region.format;
+
+        let temp = {};
+        let eligible = {};
+        let valid = true;
+        let currentClass = classCode;
+        results = {};
+        results[currentClass] = new_results();
+
+        for (index = 1; index < parse.length; index++) {
+            temp = {}
+            temp.times = []
+            bestIndices = []
+            for (row = 0; row < format.length; row++) {
+                let columns = $(parse[index]).find('td');
+
+                if (columns.length > 1) {
+                    for (col = 0; col < columns.length; col++) {
+                        element = format[row][col];
+                        if (element == null) {
+                            ;
+                        }
+                        else if (element == "t") {
+                            let txt = $(columns[col]).text().trim();
+                            const html = $(columns[col]).html().trim();
+                            if(html.startsWith("<s>")){
+                                txt = txt + "+OFF";
+                            }
+                            if(html.startsWith("<b>")){
+                                bestIndices.push(temp.times.length);
+                            }
+                            temp.times.push(simplifyTime(txt.replace(/\(/g, '+').replace(/\)/g, '')));
+                        }
+                        else {
+                            temp[element] = $(columns[col]).text().trim();
+                        }
+                    }
+                    if (row + 1 < format.length) {
+                        index++;
+                    }
+                }
+                else {
+                    valid = false;
+                    break;
+                }
+            }
+
+            if (valid) {
+                temp.driver = toTitleCase(temp.driver);
+            }
+
+            if (valid && eligibleName(temp.driver, eligible)) {
+                
+                temp.classCode = currentClass;
+                if(temp.carClass == undefined || temp.carClass.trim() == ""){
+                    temp.carClass = currentClass.toUpperCase();
+                } else {
+                    temp.carClass = temp.carClass.toUpperCase();
+                }
+                if(temp.carClass.startsWith(currentClass) && temp.carClass != currentClass){
+                    temp.carClass = temp.carClass.slice(currentClass.length).trim();
+                }
+                if(temp.offset == undefined || temp.offset == ""){ temp.offset = "-" }
+                temp.offset = temp.offset.replace(/\(/g, '+').replace(/\)/g, '');
+                
+                temp.pax = simplifyTime(temp.pax);
+
+                intPosition = parseInt(temp.position)
+                if (stats.hasOwnProperty(temp.driver)) {
+                    if (intPosition < stats[temp.driver].position) {
+                        temp.color = color_upPos;
+                    }
+                    else if (intPosition > stats[temp.driver].position) {
+                        temp.color = color_downPos;
+                    }
+                    else if (temp.times.length > stats[temp.driver].runs) {
+                        temp.color = color_newTime;
+                    }
+                    else {
+                        temp.color = color_none;
+                    }
+                }
+                else {
+                    temp.color = color_none;
+                }
+
+                runs = temp.times.length;
+                for (i = 0; i < bestIndices.length; i++) {
+                    temp.times = bestTime(temp.times, bestIndices[i]);
+                }
+                temp.times = beautifyTimes(temp.times, -1)
+
+                if (!results.hasOwnProperty(temp.classCode)) {
+                    ;
+                }
+                else if (intPosition <= 10) {
+
+                    results[temp.classCode][temp.position] = { ...temp }
+                }
+                else if (temp.driver == "Jesse Both") {
+                    // put me in 10th if I am outisde top 10
+                    results[temp.classCode]["10"] = { ...temp }
+                }
+                stats[temp.driver] = { "position": intPosition, "runs": runs }
+                temp = {}
+            }
+            else {
+                valid = true;
+            }
+
+        };
+        updates++;
+        if (updates > 100) { updates = 0; }
+        if (classCode != undefined) {
+            if (results.hasOwnProperty(classCode)) {
+                results[classCode]["updates"] = updates;
+                return results[classCode]
+            }
+            else {
+                return new_results()
+            }
+        }
+        else {
+            return results
+        }
+    } catch (error) {
+        console.log(error)
+        err = error.stack.split('\n')[0].split(':');
+        results = new_results();
+        results["1"].driver =  err[0];
+        results["1"].number = error.response ? error.response.status : '-1';
+        results["1"].times = err[1];
+        results["1"].color = color_downPos;
+        return results;
+    }
+}
 
 function new_results() {
     return {
@@ -259,7 +487,8 @@ function new_results() {
         "7": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "7", "color": "#ffffff" },
         "8": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "8", "color": "#ffffff" },
         "9": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "9", "color": "#ffffff" },
-        "10": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "color": "#ffffff" }
+        "10": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "color": "#ffffff" },
+        "updates": -1
     }
 }
 
@@ -350,8 +579,23 @@ function simplifyTime(_string) {
     return string
 }
 
+function bestTime(times, bestIdx) {
+    split = times[bestIdx].split("+")
+    if(split.length > 1){
+        split[1] = split[1] + "[/c]"
+    }
+
+    split[0] = "[b][c=#ff54ccff]" + split[0] + "[/c][/b]"
+    times[bestIdx] = split.join("[c=#ffde6868]+")
+
+    return times;
+}
+
 function beautifyTimes(times, bestIdx) {
     for (i = 0; i < times.length; i++) {
+        if(times[i].startsWith("[b]")){
+            continue;
+        }
         split = times[i].split("+")
         if(split.length > 1){
             split[1] = split[1] + "[/c]"
@@ -365,11 +609,10 @@ function beautifyTimes(times, bestIdx) {
     retval = times.join('   ').trim();
     if(retval == "") { retval = " " }
     return retval;
-
 }
 
 function convertToSeconds(time) {
-    if (time == "", time.includes('DNF') || time.includes('OFF') || time.includes('DSQ')) {
+    if (time == "", time.includes('DNF') || time.includes('OFF') || time.includes('DSQ') || time.includes("RRN")) {
         return Infinity;
     }
 
