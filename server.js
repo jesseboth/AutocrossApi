@@ -487,7 +487,8 @@ function new_results() {
         "7": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "7", "color": "#ffffff" },
         "8": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "8", "color": "#ffffff" },
         "9": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "9", "color": "#ffffff" },
-        "10": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "color": "#ffffff" }
+        "10": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "color": "#ffffff" },
+        "updates": -1
     }
 }
 
