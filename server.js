@@ -28,6 +28,7 @@ const getJsonData = (filePath) => {
     }
 };
 const regions = getJsonData('data/regions.json');
+const settings = getJsonData('data/settings.json');
 
 // Schedule the task to run every Monday at 00:00
 cron.schedule('0 0 * * 1', async function () {
@@ -580,6 +581,10 @@ function simplifyTime(_string) {
 }
 
 function bestTime(times, bestIdx) {
+    if(!settings.widget_mode){
+        return times;
+    }
+
     split = times[bestIdx].split("+")
     if(split.length > 1){
         split[1] = split[1] + "[/c]"
@@ -592,6 +597,9 @@ function bestTime(times, bestIdx) {
 }
 
 function beautifyTimes(times, bestIdx) {
+    if(!settings.widget_mode){
+        return times;
+    }
     for (i = 0; i < times.length; i++) {
         if(times[i].startsWith("[b]")){
             continue;
