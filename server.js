@@ -29,6 +29,8 @@ const getJsonData = (filePath) => {
 };
 const regions = getJsonData('data/regions.json');
 const settings = getJsonData('data/settings.json');
+const widget_mode = settings.widget_mode;
+const user_driver = settings.driver;
 
 // Schedule the task to run every Monday at 00:00
 cron.schedule('0 0 * * 1', async function () {
@@ -230,7 +232,7 @@ async function axware(region_name, region, classCode) {
                             }
                         }
                         else {
-                            temp[element] = $(columns[col]).text().trim();
+                            temp[element] = $(columns[col]).text().trim() == "" ? "-" : $(columns[col]).text().trim();
                         }
                     }
                     if (row + 1 < format.length) {
@@ -287,10 +289,10 @@ async function axware(region_name, region, classCode) {
                 if (!results.hasOwnProperty(temp.classCode)) {
                     ;
                 }
-                else if (intPosition <= 10) {
+                else if (!widget_mode || intPosition <= 10) {
                     results[temp.classCode][temp.position] = { ...temp }
                 }
-                else if (temp.driver == "Jesse Both") {
+                else if (temp.driver == user_driver) {
                     // put me in 10th if I am outisde top 10
                     results[temp.classCode]["10"] = { ...temp }
                 }
@@ -302,6 +304,7 @@ async function axware(region_name, region, classCode) {
             }
 
         };
+
         updates++;
         if (updates > 100) { updates = 0; }
         if (classCode != undefined) {
@@ -374,7 +377,7 @@ async function pronto(region_name, region, classCode) {
                             temp.times.push(simplifyTime(txt.replace(/\(/g, '+').replace(/\)/g, '')));
                         }
                         else {
-                            temp[element] = $(columns[col]).text().trim();
+                            temp[element] = $(columns[col]).text().trim() == "" ? "-" : $(columns[col]).text().trim();
                         }
                     }
                     if (row + 1 < format.length) {
@@ -392,7 +395,6 @@ async function pronto(region_name, region, classCode) {
             }
 
             if (valid && eligibleName(temp.driver, eligible)) {
-                
                 temp.classCode = currentClass;
                 if(temp.carClass == undefined || temp.carClass.trim() == ""){
                     temp.carClass = currentClass.toUpperCase();
@@ -404,7 +406,6 @@ async function pronto(region_name, region, classCode) {
                 }
                 if(temp.offset == undefined || temp.offset == ""){ temp.offset = "-" }
                 temp.offset = temp.offset.replace(/\(/g, '+').replace(/\)/g, '');
-                
                 temp.pax = simplifyTime(temp.pax);
 
                 intPosition = parseInt(temp.position)
@@ -435,11 +436,10 @@ async function pronto(region_name, region, classCode) {
                 if (!results.hasOwnProperty(temp.classCode)) {
                     ;
                 }
-                else if (intPosition <= 10) {
-
+                else if (!widget_mode || intPosition <= 10) {
                     results[temp.classCode][temp.position] = { ...temp }
                 }
-                else if (temp.driver == "Jesse Both") {
+                else if (temp.driver == user_driver) {
                     // put me in 10th if I am outisde top 10
                     results[temp.classCode]["10"] = { ...temp }
                 }
@@ -473,13 +473,20 @@ async function pronto(region_name, region, classCode) {
         results["1"].number = error.response ? error.response.status : '-1';
         results["1"].times = err[1];
         results["1"].color = color_downPos;
+
         return results;
     }
 }
 
 function new_results() {
+
+    const not_found = "Class not found";
+    if (!widget_mode) {
+        return {"1": {"driver": not_found}}
+    }
+
     return {
-        "1": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "1", "color": "#ffffff" },
+        "1": { "driver": not_found, "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "1", "color": "#ffffff" },
         "2": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "2", "color": "#ffffff" },
         "3": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "3", "color": "#ffffff" },
         "4": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "4", "color": "#ffffff" },
@@ -491,23 +498,6 @@ function new_results() {
         "10": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "color": "#ffffff" },
         "updates": -1
     }
-}
-
-function reset_results(classes, widget = false) {
-    results = {}
-
-    if (!widget) {
-        for (i = 0; i < classes.length; i++) {
-            results[classes[i]] = []
-        }
-    }
-    else {
-        for (i = 0; i < classes.length; i++) {
-            results[classes[i]] = new_results();
-        }
-    }
-
-    return results
 }
 
 function getYesterdate() {
@@ -528,7 +518,7 @@ async function fetchAndSaveWebpage(local_url, region) {
         const htmlContent = response.data;
 
         filepath = "archiveOther/"
-        if(htmlContent.includes("Jesse Both")){
+        if(htmlContent.includes(user_driver)){
             filepath = "archive/"
         }
 
@@ -581,7 +571,7 @@ function simplifyTime(_string) {
 }
 
 function bestTime(times, bestIdx) {
-    if(!settings.widget_mode){
+    if(!widget_mode){
         return times;
     }
 
@@ -597,7 +587,7 @@ function bestTime(times, bestIdx) {
 }
 
 function beautifyTimes(times, bestIdx) {
-    if(!settings.widget_mode){
+    if(!widget_mode){
         return times;
     }
     for (i = 0; i < times.length; i++) {
