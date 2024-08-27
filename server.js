@@ -29,7 +29,7 @@ const getJsonData = (filePath) => {
 };
 const regions = getJsonData('data/regions.json');
 const settings = getJsonData('data/settings.json');
-const user_driver = settings.driver;
+const user_driver = settings.user;
 
 // Schedule the task to run every Monday at 00:00
 cron.schedule('0 0 * * 1', async function () {
@@ -308,11 +308,11 @@ async function axware(region_name, region, classCode, widget = false) {
 
         };
 
-        updates++;
-        if (updates > 100) { updates = 0; }
         if (classCode != undefined) {
-            if (widget && results.hasOwnProperty(classCode)) {
-                results[classCode]["updates"] = updates;
+            if(classCode == "PAX"){
+                return pax(results, widget);
+            }
+            else if (widget && results.hasOwnProperty(classCode)) {
                 return  results[classCode];
             }
             else if (results.hasOwnProperty(classCode)){
@@ -671,4 +671,90 @@ function eligibleName(name, namesObj) {
         return false;
     }
 }
+
+function pax(results, widget){
+    ret = {}
+
+    // Flattening the JSON by one level
+    const flattenedData = [];
+
+    Object.keys(results).forEach(classCode => {
+    Object.keys(results[classCode]).forEach(entryId => {
+        const entryData = results[classCode][entryId];
+        if (typeof entryData === 'object' && entryData !== null) {
+        entryData['classCode'] = classCode; // Add the classCode to each entry
+        flattenedData.push(entryData);
+        }
+    });
+    });
+
+    paxSort(flattenedData);
+
+    for(i = 0; i < flattenedData.length; i++){
+        flattenedData[i].position = (i+1).toString();
+        if(i > 0){
+            const paxA = parseFloat(flattenedData[i-1].pax);
+            const paxB = parseFloat(flattenedData[i].pax);
+            if(paxB == NaN){
+                flattenedData[i].offset = "-";
+            }
+
+            flattenedData[i].offset = ((paxB - paxA).toFixed(3)).toString();
+        }
+
+        if(widget){
+            if(i < 10){
+                ret[(i+1).toString()] = flattenedData[i];
+            }
+            else if(flattenedData[i].driver == user_driver){
+                ret["10"] = flattenedData[i];
+                break;
+            }
+        }
+        else {
+            ret[(i+1).toString()] = flattenedData[i];
+        }
+    }
+
+    return ret;
+}
+
+// Custom sort function to handle numeric and non-numeric 'pax' values
+function paxSort(data) {
+    return data.sort((a, b) => {
+        let stringA = a.pax.trim();
+        let stringB = b.pax.trim();
+        if(stringA == "OFF" || stringA == "DNF" || stringA == "DSQ"){
+            stringA = "DNF";
+        }
+        if(stringB == "OFF" || stringB == "DNF" || stringB == "DSQ"){
+            stringB = "DNF";
+        }
+
+        if(stringA == "DNS" && stringB == "DNS"){
+            return 0;
+        }
+        else if(stringA == "DNS"){
+            return 1;
+        }
+        else if(stringB == "DNS"){
+            return -1;
+        }
+        else
+
+        if(stringA == "DNF" && stringB == "DNF"){
+            return 0;
+        }
+        else if(stringA == "DNF"){
+            return 1;
+        }
+        else if(stringB == "DNF"){
+            return -1;
+        }
+        const paxA = parseFloat(a.pax);
+        const paxB = parseFloat(b.pax);
+
+        return paxA - paxB; // Both are numeric, sort in ascending order
+    });
+  }
 
