@@ -29,7 +29,6 @@ const getJsonData = (filePath) => {
 };
 const regions = getJsonData('data/regions.json');
 const settings = getJsonData('data/settings.json');
-const widget_mode = settings.widget_mode;
 const user_driver = settings.driver;
 
 // Schedule the task to run every Monday at 00:00
@@ -42,11 +41,11 @@ cron.schedule('0 0 * * 1', async function () {
 });
 
 let event_stats = {};
-reset_stats(regions);
+reset_stats();
 
 // Schedule a task to run every Sunday at 2:30 AM
 cron.schedule('30 2 * * 0', () => {
-    reset_stats(regions);
+    reset_stats();
 });
 
 app.use(express.static('public')); // Serve static files from the public directory
@@ -103,32 +102,73 @@ color_downPos = "#d14545"
 color_newTime = "#1fb9d1"
 color_none = "#ffffff"
 updates = 0;
-app.get('/:region/:class?', async (req, res) => {
-    const region = req.params.region.toUpperCase();
-    classCode = req.params.class;
+app.get('/:a/:b/:c?/:d?', async (req, res) => {
+// app.get('/:widget?/:region/:class?', async (req, res) => {
+    let widget = false;
+    let tour = false;
+    let region = "";
+    let classCode = "";
 
-    if(classCode != undefined){
-        classCode = req.params.class.toUpperCase();
+    switch (req.params.a.toUpperCase()) {
+        case "WIDGET":
+            widget = true;
+            break;
+        case "TOUR":
+            tour = true;
+            break;
+        default:
+            region = req.params.a.toUpperCase();
+            break;
+    }
+
+    switch (req.params.b.toUpperCase()) {
+        case "TOUR":
+            tour = true;
+            break;
+        default:
+            region = req.params.b.toUpperCase();
+            break;
+    }
+
+    if(widget && tour){
+        region = req.params.c.toUpperCase();
+        classCode = req.params.d.toUpperCase();
+
+    }
+    else if(widget || tour){
+        region = req.params.b.toUpperCase();
+        classCode = req.params.c.toUpperCase();
+    }
+    else{
+        region = req.params.a.toUpperCase();
+        classCode = req.params.b.toUpperCase();
     }
 
     try {
-        if (!regions.hasOwnProperty(region)) {
-            ret = new_results();
+        if (!tour && !regions.hasOwnProperty(region)) {
+            ret = new_results(widget);
             ret["1"].driver = "Region not found";
             res.json(ret);
             return;
         }
 
-        const region_dict = regions[region];
+        let region_dict = {}
+        if(tour){
+            region_dict = {...regions["TOUR"]};
+            region_dict.url = region_dict.url + region + "/";
+        }
+        else{
+            region_dict = regions[region];
+        }
 
         if(region_dict.software == "axware"){
-            res.json(await axware(region, region_dict, classCode));
+            res.json(await axware(region, region_dict, classCode, widget));
         }
         else if(region_dict.software == "pronto"){
-            res.json(await pronto(region, region_dict, classCode));
+            res.json(await pronto(region, region_dict, classCode, widget));
         }
         else {
-            ret = new_results();
+            ret = new_results(widget);
             ret["1"].driver = "Timing Software not defined";
             res.json(ret);
             return;
@@ -140,53 +180,16 @@ app.get('/:region/:class?', async (req, res) => {
         res.json(ret);
     }
 });
-
-app.get('/tour/:region/:class?', async (req, res) => {
-    const region = req.params.region.toUpperCase();
-    classCode = req.params.class;
-
-    if(classCode != undefined){
-        classCode = req.params.class.toUpperCase();
-    }
-
-    try {
-        if (!regions.hasOwnProperty("TOUR")) {
-            ret = new_results();
-            ret["1"].driver = "Region not found";
-            res.json(ret);
-            return;
-        }
-
-        let region_dict = { ...regions["TOUR"] };
-        region_dict.url = region_dict.url + region + "/";
-
-        if(region_dict.software == "axware"){
-            res.json(await axware(region, region_dict, classCode));
-        }
-        else if(region_dict.software == "pronto"){
-            res.json(await pronto("TOUR", region_dict, classCode));
-        }
-        else {
-            ret = new_results();
-            ret["1"].driver = "Timing Software not defined";
-            res.json(ret);
-            return;
-        }
-    } catch (error) {
-        console.error(error);
-        ret = new_results();
-        ret["1"].driver = "Error fetching data";
-        res.json(ret);
-    }
-});
-
 
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
 
-async function axware(region_name, region, classCode) {
+async function axware(region_name, region, classCode, widget = false) {
     const url = region.url;
+    if(!event_stats.hasOwnProperty(region_name)){
+        event_stats[region_name] = {};
+    }
     let stats = event_stats[region_name];
 
     try {
@@ -213,7 +216,7 @@ async function axware(region_name, region, classCode) {
                 let classElem = $(parse[index]).find('th');
                 if(classElem.length > 0){
                     currentClass = $(classElem).text().trim().split(" ")[0].toUpperCase();
-                    results[currentClass] = new_results();
+                    results[currentClass] = new_results(widget);
                 }
                 if (currentClass != "" && columns.length > 1) {
                     let format_offset = 0;
@@ -284,12 +287,12 @@ async function axware(region_name, region, classCode) {
                 }
 
                 runs = temp.times.length;
-                temp.times = beautifyTimes(temp.times, findBestTimeIndex(temp.times));
+                temp.times = beautifyTimes(temp.times, findBestTimeIndex(temp.times), widget);
 
                 if (!results.hasOwnProperty(temp.classCode)) {
                     ;
                 }
-                else if (!widget_mode || intPosition <= 10) {
+                else if (!widget || intPosition <= 10) {
                     results[temp.classCode][temp.position] = { ...temp }
                 }
                 else if (temp.driver == user_driver) {
@@ -308,15 +311,21 @@ async function axware(region_name, region, classCode) {
         updates++;
         if (updates > 100) { updates = 0; }
         if (classCode != undefined) {
-            if (results.hasOwnProperty(classCode)) {
+            if (widget && results.hasOwnProperty(classCode)) {
                 results[classCode]["updates"] = updates;
-                return results[classCode]
+                return  results[classCode];
+            }
+            else if (results.hasOwnProperty(classCode)){
+                return Object.values(results[classCode]);
             }
             else {
-                return new_results()
+                return new_results(widget)
             }
         }
         else {
+            for(const key in results){
+                results[key] = Object.values(results[key]);
+            }
             return results
         }
     } catch (error) {
@@ -332,8 +341,11 @@ async function axware(region_name, region, classCode) {
     }
 }
 
-async function pronto(region_name, region, classCode) {
+async function pronto(region_name, region, classCode, widget = false) {
     const url = region.url + classCode + ".php";
+    if(!event_stats.hasOwnProperty(region_name)){
+        event_stats[region_name] = {};
+    }
     let stats = event_stats[region_name];
 
     try {
@@ -350,7 +362,7 @@ async function pronto(region_name, region, classCode) {
         let valid = true;
         let currentClass = classCode;
         results = {};
-        results[currentClass] = new_results();
+        results[currentClass] = new_results(widget);
 
         for (index = 1; index < parse.length; index++) {
             temp = {}
@@ -429,14 +441,14 @@ async function pronto(region_name, region, classCode) {
 
                 runs = temp.times.length;
                 for (i = 0; i < bestIndices.length; i++) {
-                    temp.times = bestTime(temp.times, bestIndices[i]);
+                    temp.times = bestTime(temp.times, bestIndices[i], widget);
                 }
-                temp.times = beautifyTimes(temp.times, -1)
+                temp.times = beautifyTimes(temp.times, -1, widget)
 
                 if (!results.hasOwnProperty(temp.classCode)) {
                     ;
                 }
-                else if (!widget_mode || intPosition <= 10) {
+                else if (!widget || intPosition <= 10) {
                     results[temp.classCode][temp.position] = { ...temp }
                 }
                 else if (temp.driver == user_driver) {
@@ -459,7 +471,7 @@ async function pronto(region_name, region, classCode) {
                 return results[classCode]
             }
             else {
-                return new_results()
+                return new_results(widget)
             }
         }
         else {
@@ -478,10 +490,10 @@ async function pronto(region_name, region, classCode) {
     }
 }
 
-function new_results() {
+function new_results(widget) {
 
     const not_found = "Class not found";
-    if (!widget_mode) {
+    if (!widget) {
         return {"1": {"driver": not_found}}
     }
 
@@ -570,8 +582,8 @@ function simplifyTime(_string) {
     return string
 }
 
-function bestTime(times, bestIdx) {
-    if(!widget_mode){
+function bestTime(times, bestIdx, widget) {
+    if(!widget){
         return times;
     }
 
@@ -586,8 +598,8 @@ function bestTime(times, bestIdx) {
     return times;
 }
 
-function beautifyTimes(times, bestIdx) {
-    if(!widget_mode){
+function beautifyTimes(times, bestIdx, widget) {
+    if(!widget){
         return times;
     }
     for (i = 0; i < times.length; i++) {
@@ -644,8 +656,8 @@ function findBestTimeIndex(times) {
     return bestTimeIndex;
 }
 
-function reset_stats(regions) {
-    for (const key in regions) {
+function reset_stats() {
+    for (const key in event_stats.keys) {
         event_stats[key] = {};
     }
 }
