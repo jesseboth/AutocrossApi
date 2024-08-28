@@ -362,7 +362,6 @@ async function pronto(region_name, region, classCode, widget = false) {
         else {
             return new_results(widget);
         }
-        console.log(url)
     }
 
     if(!event_stats.hasOwnProperty(region_name)){

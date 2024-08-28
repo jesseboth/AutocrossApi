@@ -40,7 +40,7 @@
         [null, null, null, "t", "t", "t", null, null]
     ],
     "data": { "element":"table", "offset": 1 },
-    "pax": [["position", "classCode", null, "number", "driver", "car", "pax"]]
+    "pax": [["position", null, "carClass", "number", "driver", "car", "pax"]]
   },
   "TOUR": {
     "url": "https://sololive.scca.com/",
@@ -52,6 +52,6 @@
         [null, null, null, "t", "t", "t", null, "offset"]
     ],
     "data": { "element":"table", "offset": 1 },
-    "pax": [["position", "classCode", null, "number", "driver", "car", "pax"]]
+    "pax": [["position", "carClass", null, "number", "driver", "car", "pax"]]
   }
 }
