@@ -102,7 +102,7 @@ color_downPos = "#d14545"
 color_newTime = "#1fb9d1"
 color_none = "#ffffff"
 updates = 0;
-app.get('/:a/:b/:c?/:d?', async (req, res) => {
+app.get('/:a/:b?/:c?/:d?', async (req, res) => {
 // app.get('/:widget?/:region/:class?', async (req, res) => {
     let widget = false;
     let tour = false;
@@ -121,13 +121,15 @@ app.get('/:a/:b/:c?/:d?', async (req, res) => {
             break;
     }
 
-    switch (req.params.b.toUpperCase()) {
-        case "TOUR":
-            tour = true;
-            break;
-        default:
-            region = req.params.b.toUpperCase();
-            break;
+    if(req.params.b != undefined){
+        switch (req.params.b.toUpperCase()) {
+            case "TOUR":
+                tour = true;
+                break;
+            default:
+                region = req.params.b.toUpperCase();
+                break;
+        }
     }
 
     if(widget && tour){
@@ -137,11 +139,18 @@ app.get('/:a/:b/:c?/:d?', async (req, res) => {
     }
     else if(widget || tour){
         region = req.params.b.toUpperCase();
+        if(req.params.c == undefined){
+            results = new_results(widget);
+            results["1"].driver =  "Class must be set";
+            results["1"].color = color_downPos;
+            res.json(results)
+            return;
+        }
         classCode = req.params.c.toUpperCase();
     }
     else{
         region = req.params.a.toUpperCase();
-        classCode = req.params.b.toUpperCase();
+        classCode = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
     }
 
     try {
@@ -342,7 +351,20 @@ async function axware(region_name, region, classCode, widget = false) {
 }
 
 async function pronto(region_name, region, classCode, widget = false) {
-    const url = region.url + classCode + ".php";
+    let url = region.url + classCode + ".php";
+    if(classCode == "PAX"){
+        if(checkUrlExists(region.url + "PaxIndexOverall.html")){
+            url = region.url + "PaxIndexOverall.html";
+        }
+        else if(checkUrlExists(region.url + "PaxIndexDay1.html")){
+            url = region.url + "PaxIndexDay1.html";
+        }
+        else {
+            return new_results(widget);
+        }
+        console.log(url)
+    }
+
     if(!event_stats.hasOwnProperty(region_name)){
         event_stats[region_name] = {};
     }
@@ -355,7 +377,7 @@ async function pronto(region_name, region, classCode, widget = false) {
         const targetElement = liveElements.eq(region.data.offset);
         const parse = targetElement.find('tr');
 
-        const format = region.format;
+        const format = classCode == "PAX" ? region.pax : region.format;
 
         let temp = {};
         let eligible = {};
@@ -463,12 +485,12 @@ async function pronto(region_name, region, classCode, widget = false) {
             }
 
         };
-        updates++;
-        if (updates > 100) { updates = 0; }
         if (classCode != undefined) {
-            if (results.hasOwnProperty(classCode)) {
-                results[classCode]["updates"] = updates;
-                return results[classCode]
+            if(classCode == "PAX"){
+                return widget ? results : flatten(results);
+            }
+            else if (results.hasOwnProperty(classCode)) {
+                return widget ? results[classCode] : flatten(results);
             }
             else {
                 return new_results(widget)
@@ -508,7 +530,6 @@ function new_results(widget) {
         "8": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "8", "color": "#ffffff" },
         "9": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "9", "color": "#ffffff" },
         "10": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "color": "#ffffff" },
-        "updates": -1
     }
 }
 
@@ -672,10 +693,7 @@ function eligibleName(name, namesObj) {
     }
 }
 
-function pax(results, widget){
-    ret = {}
-
-    // Flattening the JSON by one level
+function flatten(results){
     const flattenedData = [];
 
     Object.keys(results).forEach(classCode => {
@@ -688,6 +706,13 @@ function pax(results, widget){
     });
     });
 
+    return flattenedData;
+}
+
+function pax(results, widget){
+    ret = {}
+
+    const flattenedData = flatten(results)
     paxSort(flattenedData);
 
     for(i = 0; i < flattenedData.length; i++){
@@ -712,7 +737,7 @@ function pax(results, widget){
             }
         }
         else {
-            ret[(i+1).toString()] = flattenedData[i];
+            return flattenedData;
         }
     }
 
@@ -758,3 +783,12 @@ function paxSort(data) {
     });
   }
 
+// Function to check if a URL exists and return a boolean
+async function checkUrlExists(url) {
+    try {
+      await axios.head(url);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
