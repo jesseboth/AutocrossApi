@@ -3,6 +3,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const cron = require('node-cron');
 const fs = require('fs');
+const { get } = require('http');
 const fsp = require('fs').promises;
 
 const app = express();
@@ -109,51 +110,43 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
     let region = "";
     let classCode = "";
 
-    switch (req.params.a.toUpperCase()) {
-        case "WIDGET":
-            widget = true;
-            break;
-        case "TOUR":
-            tour = true;
-            break;
-        default:
-            region = req.params.a.toUpperCase();
-            break;
-    }
-
-    if(req.params.b != undefined){
-        switch (req.params.b.toUpperCase()) {
+    try {
+        switch (req.params.a.toUpperCase()) {
+            case "WIDGET":
+                widget = true;
+                break;
             case "TOUR":
                 tour = true;
                 break;
             default:
-                region = req.params.b.toUpperCase();
+                region = req.params.a.toUpperCase();
                 break;
         }
-    }
 
-    if(widget && tour){
-        region = req.params.c.toUpperCase();
-        classCode = req.params.d.toUpperCase();
-
-    }
-    else if(widget || tour){
-        region = req.params.b.toUpperCase();
-        if(req.params.c == undefined){
-            results = new_results(widget);
-            results["1"].driver =  "Class must be set";
-            results["1"].color = color_downPos;
-            res.json(results)
-            return;
+        if(req.params.b != undefined){
+            switch (req.params.b.toUpperCase()) {
+                case "TOUR":
+                    tour = true;
+                    break;
+                default:
+                    region = req.params.b.toUpperCase();
+                    break;
+            }
         }
-        classCode = req.params.c.toUpperCase();
-    }
-    else{
-        region = req.params.a.toUpperCase();
-        classCode = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
-    }
 
-    try {
+        if(widget && tour){
+            region = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
+            classCode = req.params.d != undefined ? req.params.d.toUpperCase() : undefined;
+        }
+        else if(widget || tour){
+            region = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
+            classCode = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
+        }
+        else{
+            region = req.params.a != undefined ? req.params.a.toUpperCase() : undefined;
+            classCode = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
+        }
+
         if (!tour && !regions.hasOwnProperty(region)) {
             ret = new_results(widget);
             ret["1"].driver = "Region not found";
@@ -164,7 +157,12 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         let region_dict = {}
         if(tour){
             region_dict = {...regions["TOUR"]};
-            region_dict.url = region_dict.url + region + "/";
+            if(region != undefined){
+                region_dict.url = region_dict.url + region + "/";
+            }
+            else {
+                region_dict.url = region_dict.url;
+            }
         }
         else{
             region_dict = regions[region];
@@ -351,17 +349,9 @@ async function axware(region_name, region, classCode, widget = false) {
 }
 
 async function pronto(region_name, region, classCode, widget = false) {
-    let url = region.url + classCode + ".php";
-    if(classCode == "PAX"){
-        if(checkUrlExists(region.url + "PaxIndexOverall.html")){
-            url = region.url + "PaxIndexOverall.html";
-        }
-        else if(checkUrlExists(region.url + "PaxIndexDay1.html")){
-            url = region.url + "PaxIndexDay1.html";
-        }
-        else {
-            return new_results(widget);
-        }
+    let classes = [classCode];
+    if(classCode == undefined){
+        classes = await getProntoClasses(region.url, region.data.classes_offset)
     }
 
     if(!event_stats.hasOwnProperty(region_name)){
@@ -370,6 +360,27 @@ async function pronto(region_name, region, classCode, widget = false) {
     let stats = event_stats[region_name];
 
     try {
+        // loop through all classes
+    let results = {};
+    for (let idx = 0; idx < classes.length; idx++) {
+        let url = "";
+        let currentClass = classes[idx];
+
+        if(currentClass == "PAX"){
+            if(checkUrlExists(region.url + "PaxIndexOverall.html")){
+                url = region.url + "PaxIndexOverall.html";
+            }
+            else if(checkUrlExists(region.url + "PaxIndexDay1.html")){
+                url = region.url + "PaxIndexDay1.html";
+            }
+            else {
+                return new_results(widget);
+            }
+        }
+        else {
+            url = region.url + currentClass + ".php";
+        }
+
         const { data } = await axios.get(url);
         const $ = cheerio.load(data);
         const liveElements = $(region.data.element);
@@ -381,8 +392,6 @@ async function pronto(region_name, region, classCode, widget = false) {
         let temp = {};
         let eligible = {};
         let valid = true;
-        let currentClass = classCode;
-        results = {};
         results[currentClass] = new_results(widget);
 
         for (index = 1; index < parse.length; index++) {
@@ -484,6 +493,7 @@ async function pronto(region_name, region, classCode, widget = false) {
             }
 
         };
+    }
         if (classCode != undefined) {
             if(classCode == "PAX"){
                 return widget ? results : flatten(results);
@@ -735,12 +745,9 @@ function pax(results, widget){
                 break;
             }
         }
-        else {
-            return flattenedData;
-        }
     }
 
-    return ret;
+    return widget ? ret : flattenedData;
 }
 
 // Custom sort function to handle numeric and non-numeric 'pax' values
@@ -780,14 +787,50 @@ function paxSort(data) {
 
         return paxA - paxB; // Both are numeric, sort in ascending order
     });
-  }
+}
 
 // Function to check if a URL exists and return a boolean
 async function checkUrlExists(url) {
     try {
-      await axios.head(url);
-      return true;
+        await axios.head(url);
+        return true;
     } catch (error) {
-      return false;
+        return false;
     }
-  }
+}
+
+async function getProntoClasses(url, offset) {
+    try {
+        // Fetch the HTML from the URL
+        const { data: html } = await axios.get(url);
+
+        // Load the HTML into Cheerio
+        const $ = cheerio.load(html);
+
+        // Select all table elements
+        const liveElements = $("table");
+
+        // Use offset to get the specific table you want
+        const targetElement = liveElements.eq(offset); // This selects the third table (0-based index)
+
+        // Initialize an array to store the extracted links without '.php'
+        const linksArray = [];
+
+        // Select all <a> elements within the targeted table
+        targetElement.find('a').each((index, element) => {
+            let link = $(element).attr('href');
+            if (link) {
+            // Remove the '.php' extension if it exists
+            link = link.replace('.php', '');
+            linksArray.push(link);
+            }
+        });
+
+        // Return the array of links
+        return linksArray;
+
+    } catch (error) {
+        console.error('Error fetching or parsing HTML:', error);
+        return [];
+    }
+}

@@ -27,7 +27,7 @@
         ["position", "carClass", "number", "driver", "pax", "t", "t", "t", "t"],
         [null, null, null, "car", "offset", "t", "t", "t", "t"]
     ],
-    "data": { "element":"table", "offset": 3 }
+    "data": { "element":"table", "offset": 3}
 },
 "MBR": {
     "url": "https://www.mbrscca.com/live/",
@@ -39,7 +39,7 @@
         [null, null, null, "t", "t", "t", null, "offset"],
         [null, null, null, "t", "t", "t", null, null]
     ],
-    "data": { "element":"table", "offset": 1 },
+    "data": { "element":"table", "offset": 1, "classes_offset": 2  },
     "pax": [["position", null, "carClass", "number", "driver", "car", "pax"]]
   },
   "TOUR": {
@@ -51,7 +51,7 @@
         [null, null, null, "t",  "t", "t", null, "pax"],
         [null, null, null, "t", "t", "t", null, "offset"]
     ],
-    "data": { "element":"table", "offset": 1 },
+    "data": { "element":"table", "offset": 1, "classes_offset": 3 },
     "pax": [["position", "carClass", null, "number", "driver", "car", "pax"]]
   }
 }
