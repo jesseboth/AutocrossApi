@@ -45,13 +45,29 @@
   "TOUR": {
     "url": "https://sololive.scca.com/",
     "software": "pronto",
-    "archive": false,
+    "archive": true,
+    "tour": true,
     "format": [
         [null, "position", "number", "driver", "car", null],
         [null, null, null, "t",  "t", "t", null, "pax"],
         [null, null, null, "t", "t", "t", null, "offset"]
     ],
-    "data": { "element":"table", "offset": 1, "classes_offset": 3 },
+    "data": { "element":"table", "offset": 1, "pro_offset": 2, "classes_offset": 3 },
+    "pax": [["position", "carClass", null, "number", "driver", "car", "pax"]]
+  },
+  "PRO": {
+    "url": "https://sololive.scca.com/",
+    "software": "pronto",
+    "archive": true,
+    "tour": true,
+    "format": [
+        [null, "position", "number", "driver", "car", null],
+        [null, null, null, "t", "t",  "t", "t", null, null, null, "pax"],
+        [],
+        [null, null, null, "t", "t",  "t", "t", null, null, null, "offset"],
+        []
+    ],
+    "data": { "element":"table", "offset": 1, "row_offset": 2, "classes_offset": 3 },
     "pax": [["position", "carClass", null, "number", "driver", "car", "pax"]]
   }
 }

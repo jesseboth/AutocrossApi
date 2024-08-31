@@ -3,7 +3,10 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const cron = require('node-cron');
 const fs = require('fs');
-const { get } = require('http');
+const { get, setMaxIdleHTTPParsers } = require('http');
+const { arch } = require('os');
+const { time } = require('console');
+const e = require('express');
 const fsp = require('fs').promises;
 
 const app = express();
@@ -36,10 +39,16 @@ const user_driver = settings.user;
 cron.schedule('0 0 * * 1', async function () {
     for (const key in regions) {
         if(regions[key].archive){
-            fetchAndSaveWebpage(regions[key].url, key);
+            // fetchAndSaveWebpage(regions[key].url, key);
+            archiveJson(key, regions[key]);
         }
     }
 });
+for (const key in regions) {
+    if(regions[key].archive){
+        archiveJson(key, regions[key]);
+    }
+}
 
 let event_stats = {};
 reset_stats();
@@ -51,7 +60,6 @@ cron.schedule('30 2 * * 0', () => {
 
 app.use(express.static('public')); // Serve static files from the public directory
 app.use('/archive', express.static("archive")); // Serve static files from the archive directory
-app.use('/archiveOther', express.static("archiveOther")); // Serve static files from the archive directory
 
 // Route to list all archived files
 app.get('/archive', async (req, res) => {
@@ -78,20 +86,6 @@ app.get('/archive', async (req, res) => {
     }
 
     html += '</ul>';
-    html += '<h1>Other Archived Files</h1>';
-    html += '<ul>';
-
-    try {
-        let files = await fsp.readdir("archiveOther");
-        for (let file of files) {
-            html += `<li><a href="/archiveOther/${file}">${file}</a></li>`;
-        }
-    } catch (err) {
-        res.status(500).send('Failed to read archiveOther directory');
-        return;
-    }
-
-    html += '</ul>';
 
     res.send(html);
 });
@@ -107,6 +101,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
 // app.get('/:widget?/:region/:class?', async (req, res) => {
     let widget = false;
     let tour = false;
+    let tourType = "";
     let region = "";
     let classCode = "";
 
@@ -115,22 +110,20 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             case "WIDGET":
                 widget = true;
                 break;
-            case "TOUR":
-                tour = true;
-                break;
             default:
                 region = req.params.a.toUpperCase();
+                if (regions[region] && regions[region].tour){
+                    tour = true;
+                    tourType = region;
+                }
                 break;
         }
 
         if(req.params.b != undefined){
-            switch (req.params.b.toUpperCase()) {
-                case "TOUR":
-                    tour = true;
-                    break;
-                default:
-                    region = req.params.b.toUpperCase();
-                    break;
+            region = req.params.b.toUpperCase();
+            if (regions[region] && regions[region].tour){
+                tour = true;
+                tourType = region;
             }
         }
 
@@ -156,7 +149,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
 
         let region_dict = {}
         if(tour){
-            region_dict = {...regions["TOUR"]};
+            region_dict = {...regions[tourType]};
             if(region != undefined){
                 region_dict.url = region_dict.url + region + "/";
             }
@@ -394,7 +387,9 @@ async function pronto(region_name, region, classCode, widget = false) {
         let valid = true;
         results[currentClass] = new_results(widget);
 
-        for (index = 1; index < parse.length; index++) {
+        
+        start_index = region.data.row_offset ? region.data.row_offset : 1;
+        for (index = start_index; index < parse.length; index++) {
             temp = {}
             temp.times = []
             bestIndices = []
@@ -554,28 +549,58 @@ function getYesterdate() {
     return `${month}-${day}-${year}`;
 }
 
-async function fetchAndSaveWebpage(local_url, region) {
+// async function covertotoJson() {
+//     let files = await fsp.readdir("archiveOther");
+//     for (let file of files) {
+//         if(file.includes(".html")){
+//             rname = file.split("_")[0];
+//             region = {...regions[rname]};
+//             region.url = "http://192.168.4.199:8000/archiveOther/" + file;
+//             console.log(region.url)
+//             await archiveJson(rname, region);
+//         }
+//     }
+// }
+
+// archiveJson("TOUR", regions["TOUR"]);
+async function archiveJson(name, region) {
     try {
-        const response = await axios.get(local_url);
+        const response = await axios.get(region.url);
         const htmlContent = response.data;
-
-        filepath = "archiveOther/"
-        if(htmlContent.includes(user_driver)){
-            filepath = "archive/"
-        }
-
-        const regex = /Live Results - Generated:\s*\w+ (\d{2}-\d{2}-\d{4}) \d{2}:\d{2}:\d{2}/;
-        const match = htmlContent.match(regex);
+        const filepath = "archive/"
 
         date = "fixme-"+getYesterdate();
+        const regex = /Live Results - Generated:\s*\w+ (\d{2}-\d{2}-\d{4}) \d{2}:\d{2}:\d{2}/;
+        match = htmlContent.match(regex);
+
         if (match) {
-            date = match[1];
+            const [month, day, year] = match[1].split('-');
+            const formattedYear = year.slice(2);
+            date = `${month}-${day}-${formattedYear}`;
+        }
+        else if(region.tour){
+            const regex = /Sportity Event Password:\s*([A-Za-z0-9]+)/;
+            match = htmlContent.match(regex);
+            date = match ? match[1] : date;
         }
 
-        const filename = filepath+`${region}_${date}.html`;
+        const filename = filepath+`${name}_${date}.json`;
+        let content = {};
+        if(region.software == "axware"){
+            content = await axware(name, region, undefined, false);
+        }
+        else if(region.software == "pronto"){
+            content = await pronto(name, region, undefined, false);
+        }
+        else {
+            console.error("Software not defined: ", region.software, "Can not archive");
+            return;
+        }
 
         // Write the HTML content to a file
-        fs.writeFileSync(filename, htmlContent, 'utf8');
+        if(Object.keys(content).length > 0){
+            fs.writeFileSync(filename, JSON.stringify(content), 'utf8');
+        }
     } catch (error) {
         console.error('Failed to fetch webpage:', error);
     }
@@ -834,3 +859,4 @@ async function getProntoClasses(url, offset) {
         return [];
     }
 }
+  
