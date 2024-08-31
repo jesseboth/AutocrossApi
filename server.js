@@ -103,7 +103,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
     let tour = false;
     let tourType = "";
     let region = "";
-    let classCode = "";
+    let cclass = "";
 
     try {
         switch (req.params.a.toUpperCase()) {
@@ -129,15 +129,15 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
 
         if(widget && tour){
             region = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
-            classCode = req.params.d != undefined ? req.params.d.toUpperCase() : undefined;
+            cclass = req.params.d != undefined ? req.params.d.toUpperCase() : undefined;
         }
         else if(widget || tour){
             region = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
-            classCode = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
+            cclass = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
         }
         else{
             region = req.params.a != undefined ? req.params.a.toUpperCase() : undefined;
-            classCode = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
+            cclass = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
         }
 
         if (!tour && !regions.hasOwnProperty(region)) {
@@ -162,10 +162,10 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         }
 
         if(region_dict.software == "axware"){
-            res.json(await axware(region, region_dict, classCode, widget));
+            res.json(await axware(region, region_dict, cclass, widget));
         }
         else if(region_dict.software == "pronto"){
-            res.json(await pronto(region, region_dict, classCode, widget));
+            res.json(await pronto(region, region_dict, cclass, widget));
         }
         else {
             ret = new_results(widget);
@@ -185,7 +185,7 @@ app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
 
-async function axware(region_name, region, classCode, widget = false) {
+async function axware(region_name, region, cclass, widget = false) {
     const url = region.url;
     if(!event_stats.hasOwnProperty(region_name)){
         event_stats[region_name] = {};
@@ -254,10 +254,10 @@ async function axware(region_name, region, classCode, widget = false) {
 
             if (valid && eligibleName(temp.driver, eligible)) {
 
-                temp.classCode = currentClass;
-                temp.carClass = temp.carClass.toUpperCase();
-                if(temp.carClass.startsWith(currentClass)){
-                    temp.carClass = temp.carClass.slice(currentClass.length).trim();
+                temp.class = currentClass;
+                temp.index = temp.index.toUpperCase();
+                if(temp.index.startsWith(currentClass)){
+                    temp.index = temp.index.slice(currentClass.length).trim();
                 }
 
                 if (temp.offset == "" || temp.offset.startsWith("[-]")) {
@@ -289,15 +289,15 @@ async function axware(region_name, region, classCode, widget = false) {
                 runs = temp.times.length;
                 temp.times = beautifyTimes(temp.times, findBestTimeIndex(temp.times), widget);
 
-                if (!results.hasOwnProperty(temp.classCode)) {
+                if (!results.hasOwnProperty(temp.class)) {
                     ;
                 }
                 else if (!widget || intPosition <= 10) {
-                    results[temp.classCode][temp.position] = { ...temp }
+                    results[temp.class][temp.position] = { ...temp }
                 }
                 else if (temp.driver == user_driver) {
                     // put me in 10th if I am outisde top 10
-                    results[temp.classCode]["10"] = { ...temp }
+                    results[temp.class]["10"] = { ...temp }
                 }
                 stats[temp.driver] = { "position": intPosition, "runs": runs }
                 temp = {}
@@ -308,15 +308,15 @@ async function axware(region_name, region, classCode, widget = false) {
 
         };
 
-        if (classCode != undefined) {
-            if(classCode == "PAX"){
+        if (cclass != undefined) {
+            if(cclass == "PAX"){
                 return pax(results, widget);
             }
-            else if (widget && results.hasOwnProperty(classCode)) {
-                return  results[classCode];
+            else if (widget && results.hasOwnProperty(cclass)) {
+                return  results[cclass];
             }
-            else if (results.hasOwnProperty(classCode)){
-                return Object.values(results[classCode]);
+            else if (results.hasOwnProperty(cclass)){
+                return Object.values(results[cclass]);
             }
             else {
                 return new_results(widget)
@@ -341,9 +341,9 @@ async function axware(region_name, region, classCode, widget = false) {
     }
 }
 
-async function pronto(region_name, region, classCode, widget = false) {
-    let classes = [classCode];
-    if(classCode == undefined){
+async function pronto(region_name, region, cclass, widget = false) {
+    let classes = [cclass];
+    if(cclass == undefined){
         classes = await getProntoClasses(region.url, region.data.classes_offset)
     }
 
@@ -380,7 +380,7 @@ async function pronto(region_name, region, classCode, widget = false) {
         const targetElement = liveElements.eq(region.data.offset);
         const parse = targetElement.find('tr');
 
-        const format = classCode == "PAX" ? region.pax : region.format;
+        const format = cclass == "PAX" ? region.pax : region.format;
 
         let temp = {};
         let eligible = {};
@@ -432,14 +432,15 @@ async function pronto(region_name, region, classCode, widget = false) {
             }
 
             if (valid && eligibleName(temp.driver, eligible)) {
-                temp.classCode = currentClass;
-                if(temp.carClass == undefined || temp.carClass.trim() == ""){
-                    temp.carClass = currentClass.toUpperCase();
+                store = temp.class;
+                temp.class = currentClass;
+                if(temp.index == undefined || temp.index.trim() == ""){
+                    temp.index = currentClass.toUpperCase();
                 } else {
-                    temp.carClass = temp.carClass.toUpperCase();
+                    temp.index = temp.index.toUpperCase();
                 }
-                if(temp.carClass.startsWith(currentClass) && temp.carClass != currentClass){
-                    temp.carClass = temp.carClass.slice(currentClass.length).trim();
+                if(temp.index.startsWith(currentClass) && temp.index != currentClass){
+                    temp.index = temp.index.slice(currentClass.length).trim();
                 }
                 if(temp.offset == undefined || temp.offset == ""){ temp.offset = "-" }
                 temp.offset = temp.offset.replace(/\(/g, '+').replace(/\)/g, '');
@@ -470,15 +471,17 @@ async function pronto(region_name, region, classCode, widget = false) {
                 }
                 temp.times = beautifyTimes(temp.times, -1, widget)
 
-                if (!results.hasOwnProperty(temp.classCode)) {
+                if (!results.hasOwnProperty(temp.class)) {
                     ;
                 }
                 else if (!widget || intPosition <= 10) {
-                    results[temp.classCode][temp.position] = { ...temp }
+                    results[temp.class][temp.position] = { ...temp }
+                    results[temp.class][temp.position].class = store;
                 }
                 else if (temp.driver == user_driver) {
                     // put me in 10th if I am outisde top 10
-                    results[temp.classCode]["10"] = { ...temp }
+                    results[temp.class]["10"] = { ...temp }
+                    results[temp.class]["10"].class = store;
                 }
                 stats[temp.driver] = { "position": intPosition, "runs": runs }
                 temp = {}
@@ -489,12 +492,12 @@ async function pronto(region_name, region, classCode, widget = false) {
 
         };
     }
-        if (classCode != undefined) {
-            if(classCode == "PAX"){
-                return widget ? results : flatten(results);
+        if (cclass != undefined) {
+            if(cclass == "PAX"){
+                return widget ? results["PAX"] : flatten(results);
             }
-            else if (results.hasOwnProperty(classCode)) {
-                return widget ? results[classCode] : flatten(results);
+            else if (results.hasOwnProperty(cclass)) {
+                return widget ? results[cclass] : flatten(results);
             }
             else {
                 return new_results(widget)
@@ -524,16 +527,16 @@ function new_results(widget) {
     }
 
     return {
-        "1": { "driver": not_found, "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "1", "color": "#ffffff" },
-        "2": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "2", "color": "#ffffff" },
-        "3": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "3", "color": "#ffffff" },
-        "4": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "4", "color": "#ffffff" },
-        "5": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "5", "color": "#ffffff" },
-        "6": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "6", "color": "#ffffff" },
-        "7": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "7", "color": "#ffffff" },
-        "8": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "8", "color": "#ffffff" },
-        "9": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "9", "color": "#ffffff" },
-        "10": { "driver": " ", "car": " ", "carClass": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "color": "#ffffff" },
+        "1": { "driver": not_found, "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "1", "color": "#ffffff" },
+        "2": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "2", "color": "#ffffff" },
+        "3": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "3", "color": "#ffffff" },
+        "4": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "4", "color": "#ffffff" },
+        "5": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "5", "color": "#ffffff" },
+        "6": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "6", "color": "#ffffff" },
+        "7": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "7", "color": "#ffffff" },
+        "8": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "8", "color": "#ffffff" },
+        "9": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "9", "color": "#ffffff" },
+        "10": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "color": "#ffffff" },
     }
 }
 
@@ -729,13 +732,11 @@ function eligibleName(name, namesObj) {
 
 function flatten(results){
     const flattenedData = [];
-
-    Object.keys(results).forEach(classCode => {
-    Object.keys(results[classCode]).forEach(entryId => {
-        const entryData = results[classCode][entryId];
+    Object.keys(results).forEach(cclass => {
+    Object.keys(results[cclass]).forEach(entryId => {
+        const entryData = results[cclass][entryId];
         if (typeof entryData === 'object' && entryData !== null) {
-        entryData['classCode'] = classCode; // Add the classCode to each entry
-        flattenedData.push(entryData);
+            flattenedData.push(entryData);
         }
     });
     });
@@ -780,10 +781,10 @@ function paxSort(data) {
     return data.sort((a, b) => {
         let stringA = a.pax.trim();
         let stringB = b.pax.trim();
-        if(stringA == "OFF" || stringA == "DNF" || stringA == "DSQ"){
+        if(stringA == "OFF" || stringA == "DNF" || stringA == "DSQ" || stringA == ""){
             stringA = "DNF";
         }
-        if(stringB == "OFF" || stringB == "DNF" || stringB == "DSQ"){
+        if(stringB == "OFF" || stringB == "DNF" || stringB == "DSQ" || stringB == ""){
             stringB = "DNF";
         }
 

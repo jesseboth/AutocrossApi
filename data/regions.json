@@ -4,7 +4,7 @@
       "software": "axware",
       "archive": true,
       "format": [
-          ["position", "carClass", "number", "driver", "pax", "t", "t", "t", "t"],
+          ["position", "index", "number", "driver", "pax", "t", "t", "t", "t"],
           [null, null, null, "car", "offset", "t", "t", "t", "t"]
       ],
       "data": { "element":".live", "offset": 3 }
@@ -14,7 +14,7 @@
       "software": "axware",
       "archive": true,
       "format": [
-          ["position", "carClass", "number", "driver", "car", null, "t-2", "pax", "offset"]
+          ["position", "index", "number", "driver", "car", null, "t-2", "pax", "offset"]
       ],
       "data": { "element":".live", "offset": 4 }
 
@@ -24,23 +24,23 @@
     "software": "axware",
     "archive": true,
     "format": [
-        ["position", "carClass", "number", "driver", "pax", "t", "t", "t", "t"],
+        ["position", "index", "number", "driver", "pax", "t", "t", "t", "t"],
         [null, null, null, "car", "offset", "t", "t", "t", "t"]
     ],
     "data": { "element":"table", "offset": 3}
-},
-"MBR": {
+    },
+  "MBR": {
     "url": "https://www.mbrscca.com/live/",
     "software": "pronto",
     "archive": false,
     "format": [
         [null, "position", "number", "driver", "car", null],
-        [null, "carClass", null, "t",  "t", "t", null, "pax"],
+        [null, "index", null, "t",  "t", "t", null, "pax"],
         [null, null, null, "t", "t", "t", null, "offset"],
         [null, null, null, "t", "t", "t", null, null]
     ],
     "data": { "element":"table", "offset": 1, "classes_offset": 2  },
-    "pax": [["position", null, "carClass", "number", "driver", "car", "pax"]]
+    "pax": [["position", "class", "index", "number", "driver", "car", "pax"]]
   },
   "TOUR": {
     "url": "https://sololive.scca.com/",
@@ -53,7 +53,7 @@
         [null, null, null, "t", "t", "t", null, "offset"]
     ],
     "data": { "element":"table", "offset": 1, "pro_offset": 2, "classes_offset": 3 },
-    "pax": [["position", "carClass", null, "number", "driver", "car", "pax"]]
+    "pax": [["position", "index", null, "number", "driver", "car", "pax"]]
   },
   "PRO": {
     "url": "https://sololive.scca.com/",
@@ -68,6 +68,6 @@
         []
     ],
     "data": { "element":"table", "offset": 1, "row_offset": 2, "classes_offset": 3 },
-    "pax": [["position", "carClass", null, "number", "driver", "car", "pax"]]
+    "pax": [["position", "index", null, "number", "driver", "car", "pax"]]
   }
 }
