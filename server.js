@@ -78,7 +78,7 @@ app.get('/archive', async (req, res) => {
     try {
         let files = await fsp.readdir("archive");
         for (let file of files) {
-            html += `<li><a href="/archive/${file}">${file}</a></li>`;
+            html += `<li><a href="/archive/${file}">${file.split(".")[0]}</a></li>`;
         }
     } catch (err) {
         res.status(500).send('Failed to read archive directory');
@@ -88,6 +88,60 @@ app.get('/archive', async (req, res) => {
     html += '</ul>';
 
     res.send(html);
+});
+
+// /archive/events -> get events
+// /archive/<region>_<date> -> get region
+// /archive/<region>_<date>/classes -> get classes
+app.get('/archive/:a?/:b?', async (req, res) => {
+    getEvents = false;
+    event_key = ""
+
+    try {
+        if(req.params.a){
+            if(req.params.a.toLowerCase() == "events"){
+                getEvents = true;
+            }
+            else{
+                event_key = req.params.a.toUpperCase();
+            }
+        }
+        if(req.params.b && !getEvents){
+            console.log(getEvents, event_key, req.params.b)
+            if(req.params.b.toLowerCase() == "classes"){
+                res.send(Object.keys(getJsonData(`archive/${event_key}.json`)));
+                return;
+            }
+            else {
+                cclass = req.params.b.toUpperCase();
+                res.send((getJsonData(`archive/${event_key}.json`))[cclass]);
+            }
+        }
+        else if(!getEvents){
+            res.send((getJsonData(`archive/${event_key}.json`)));
+            return;
+            
+        }
+    }  catch (err) {
+        res.status(500).send('Failed to find event, ' + err);
+        return;
+    }
+
+    try {
+        if(getEvents){
+            arr = []
+            let files = await fsp.readdir("archive");
+            for (let file of files) {
+                file = file.split(".")[0];
+                arr.push(file);
+            }
+            res.send(arr);
+    }
+    } catch (err) {
+        res.status(500).send('Failed to read archive directory');
+        return;
+    }
+
 });
 
 
@@ -268,22 +322,24 @@ async function axware(region_name, region, cclass, widget = false) {
 
                 temp.position = temp.position.split("T")[0];
                 intPosition = parseInt(temp.position)
-                if (stats.hasOwnProperty(temp.driver)) {
-                    if (intPosition < stats[temp.driver].position) {
-                        temp.color = color_upPos;
-                    }
-                    else if (intPosition > stats[temp.driver].position) {
-                        temp.color = color_downPos;
-                    }
-                    else if (temp.times.length > stats[temp.driver].runs) {
-                        temp.color = color_newTime;
+                if(widget){
+                    if (stats.hasOwnProperty(temp.driver)) {
+                        if (intPosition < stats[temp.driver].position) {
+                            temp.color = color_upPos;
+                        }
+                        else if (intPosition > stats[temp.driver].position) {
+                            temp.color = color_downPos;
+                        }
+                        else if (temp.times.length > stats[temp.driver].runs) {
+                            temp.color = color_newTime;
+                        }
+                        else {
+                            temp.color = color_none;
+                        }
                     }
                     else {
                         temp.color = color_none;
                     }
-                }
-                else {
-                    temp.color = color_none;
                 }
 
                 runs = temp.times.length;
@@ -447,22 +503,24 @@ async function pronto(region_name, region, cclass, widget = false) {
                 temp.pax = simplifyTime(temp.pax);
 
                 intPosition = parseInt(temp.position)
-                if (stats.hasOwnProperty(temp.driver)) {
-                    if (intPosition < stats[temp.driver].position) {
-                        temp.color = color_upPos;
-                    }
-                    else if (intPosition > stats[temp.driver].position) {
-                        temp.color = color_downPos;
-                    }
-                    else if (temp.times.length > stats[temp.driver].runs) {
-                        temp.color = color_newTime;
+                if(widget){
+                    if (stats.hasOwnProperty(temp.driver)) {
+                        if (intPosition < stats[temp.driver].position) {
+                            temp.color = color_upPos;
+                        }
+                        else if (intPosition > stats[temp.driver].position) {
+                            temp.color = color_downPos;
+                        }
+                        else if (temp.times.length > stats[temp.driver].runs) {
+                            temp.color = color_newTime;
+                        }
+                        else {
+                            temp.color = color_none;
+                        }
                     }
                     else {
                         temp.color = color_none;
                     }
-                }
-                else {
-                    temp.color = color_none;
                 }
 
                 runs = temp.times.length;
@@ -715,7 +773,7 @@ function findBestTimeIndex(times) {
 }
 
 function reset_stats() {
-    for (const key in event_stats.keys) {
+    for (const key in Object.keys(event_stats)) {
         event_stats[key] = {};
     }
 }
