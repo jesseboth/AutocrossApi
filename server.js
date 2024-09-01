@@ -5,7 +5,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const { get, setMaxIdleHTTPParsers } = require('http');
 const { arch } = require('os');
-const { time } = require('console');
+const { time, info } = require('console');
 const e = require('express');
 const fsp = require('fs').promises;
 
@@ -78,7 +78,9 @@ app.get('/archive', async (req, res) => {
     try {
         let files = await fsp.readdir("archive");
         for (let file of files) {
-            html += `<li><a href="/archive/${file}">${file.split(".")[0]}</a></li>`;
+            file_name = file.split(".")[0]; 
+            event_info = file_name.split("_");
+            html += `<li><a href="/archive/${file_name}/ui">${file_name}</a></li>`;
         }
     } catch (err) {
         res.status(500).send('Failed to read archive directory');
@@ -93,11 +95,12 @@ app.get('/archive', async (req, res) => {
 // /archive/events -> get events
 // /archive/<region>_<date> -> get region
 // /archive/<region>_<date>/classes -> get classes
-app.get('/archive/:a?/:b?', async (req, res) => {
+app.get('/archive/:a?/:b?/:c?', async (req, res) => {
     getEvents = false;
     event_key = ""
 
     try {
+        // TODO: this needs to be cleaned up #badcode
         if(req.params.a){
             if(req.params.a.toLowerCase() == "events"){
                 getEvents = true;
@@ -107,22 +110,44 @@ app.get('/archive/:a?/:b?', async (req, res) => {
             }
         }
         if(req.params.b && !getEvents){
-            console.log(getEvents, event_key, req.params.b)
             if(req.params.b.toLowerCase() == "classes"){
-                res.send(Object.keys(getJsonData(`archive/${event_key}.json`)));
+                res.json(Object.keys(getJsonData(`archive/${event_key}.json`)));
+            }
+            if(req.params.b.toLowerCase() == "ui"){
+                event_info = event_key.split("_");
+                res.send(uiBuilder(getJsonData(`archive/${event_key}.json`), event_info[0], event_info[1], false));
                 return;
+            }
+            if(req.params.b.toLowerCase() == "pax"){
+                event_info = event_key.split("_");
+                if(req.params.c && !getEvents){
+                    if(req.params.c.toLowerCase() == "ui"){
+                        event_info = event_key.split("_");
+                        res.send(uiBuilder(pax(getJsonData(`archive/${event_key}.json`), false), event_info[0], event_info[1], true));
+                    }
+                }
+                else if(!getEvents){
+                    res.json(pax(getJsonData(`archive/${event_key}.json`)));
+                }
             }
             else {
                 cclass = req.params.b.toUpperCase();
-                res.send((getJsonData(`archive/${event_key}.json`))[cclass]);
+                res.json((getJsonData(`archive/${event_key}.json`))[cclass]);
             }
         }
-        else if(!getEvents){
-            res.send((getJsonData(`archive/${event_key}.json`)));
+        else if(!req.params.b && !getEvents){
+            res.json((getJsonData(`archive/${event_key}.json`)));
+        }
+        else if(req.params.c && !getEvents && req.params.c.toLowerCase() == "ui"){
+            event_info = event_key.split("_")[0];
+            res.send(uiBuilder(getJsonData(`archive/${event_key}.json`)[cclass], event_info[0], event_info[1], false));
             return;
-            
+        }
+        else if(!getEvents) {
+            res.status(500).send('Incorrect querry');
         }
     }  catch (err) {
+        console.log(err)
         res.status(500).send('Failed to find event, ' + err);
         return;
     }
@@ -135,7 +160,7 @@ app.get('/archive/:a?/:b?', async (req, res) => {
                 file = file.split(".")[0];
                 arr.push(file);
             }
-            res.send(arr);
+            res.json(arr);
     }
     } catch (err) {
         res.status(500).send('Failed to read archive directory');
@@ -562,6 +587,9 @@ async function pronto(region_name, region, cclass, widget = false) {
             }
         }
         else {
+            for(const key in results){
+                results[key] = Object.values(results[key]);
+            }
             return results
         }
     } catch (error) {
@@ -830,7 +858,6 @@ function pax(results, widget){
             }
         }
     }
-
     return widget ? ret : flattenedData;
 }
 
@@ -918,4 +945,133 @@ async function getProntoClasses(url, offset) {
         return [];
     }
 }
-  
+
+function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(), pax = false) {
+    // Function to generate table rows for each entry
+    function generateTableRows(entries) {
+        let rows = '';
+        entries.forEach((entry, index) => {
+            const rowClass = index % 2 === 0 ? 'rowlow' : 'rowhigh';
+            rows += `<tr class="${rowClass}">
+                <td nowrap align="center">${entry.position}</td>
+                <td nowrap align="right">${entry.index}</td>
+                <td nowrap align="right">${entry.number}</td>
+                <td nowrap align="left">${entry.driver}</td>
+                <td nowrap ><font class='bestt'>${entry.pax}</font></td>
+                <td valign="top" nowrap >${entry.times[0] || ''}</td>
+                <td valign="top" nowrap >${entry.times[1] || ''}</td>
+                <td valign="top" nowrap >${entry.times[2] || ''}</td>
+                <td valign="top" nowrap >${entry.times[3] || ''}</td>
+            </tr>
+            <tr class="${rowClass}">
+                <td nowrap align="center"></td>
+                <td nowrap align="right"></td>
+                <td nowrap align="right"></td>
+                <td nowrap align="left">${entry.car}</td>
+                <td nowrap >${entry.offset}</td>
+                <td valign="top" nowrap >${entry.times[4] || ''}</td>
+                <td valign="top" nowrap >${entry.times[5] || ''}</td>
+                <td valign="top" nowrap ></td>
+                <td valign="top" nowrap ></td>
+            </tr>`;
+        });
+        return rows;
+    }
+
+    // Generate the HTML content
+    let htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <title>Updated: ${date}</title>
+        <style>
+            body { margin: 0; padding: 0; width: 98vw; max-width: 100%; font-family: Verdena; }
+            .rowhigh { background-color: #e6e6e8; }
+            .rowlow { background-color: #FFFFFF; }
+            h1, h2, h3 { text-align: center; font-family: Arial; color: #0000FF; }
+            th { color: #FFFFFF; background-color: #152bed; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { padding: 8px; text-align: center; }
+            a { color: blue; text-decoration: none; }
+            .bestt { font-weight: bold; }
+            .toggle-button {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                padding: 10px 20px;
+                background-color: #6495ed;
+                color: white;
+                border: none;
+                cursor: pointer;
+                font-size: 14px;
+                border-radius: 5px;
+            }
+        </style>
+        <script>
+            function toggleURL() {
+                const currentURL = window.location.href;
+                if (currentURL.includes('/pax/')) {
+                    window.location.href = currentURL.replace('/pax/', '/');
+                } else {
+                    window.location.href = currentURL.replace('/ui', '/pax/ui');
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <button class="toggle-button" onClick="toggleURL()">Toggle ${pax ? "Class" : "PAX"}</button>
+        <h1>${name.toUpperCase()} Results</h1>
+        <table class='live' cellpadding='3' cellspacing='1' style='border-collapse: collapse' align='center'>
+            <tbody>
+                <tr class="rowlow">
+                    <th nowrap align="center">Region - ${name}</th>
+                </tr>
+                <tr class="rowlow">
+                    <th nowrap align="center">Updated: ${date}</th>
+                </tr>
+            </tbody>
+        </table>
+        <a name="#top"></a>
+            <table class='live' border='0' cellspacing='5' width='80%' cellpadding='3' style='border-collapse: collapse; word-wrap: break-word; table-layout: fixed;' align='center'>
+                <tbody>
+                    <tr>
+                        ${pax ? '' : Object.keys(jsonData).map(category => `<td style="word-wrap: break-word; white-space: normal;"><a class='bkmark' href="#${category}">${category}</a></td>`).join('')}
+                    </tr>
+                </tbody>
+            </table>
+    `;
+
+    // Iterate over each category (P, T, S, etc.)
+    if (pax) {
+        htmlContent += `
+        <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
+        <tbody>
+        <tr class="rowlow">
+        <th nowrap rowspan="1" colspan="9" align="left"><a name="PAX"></a> PAX - Total Entries: ${jsonData.length}</th>
+        </tr>
+        
+        ${generateTableRows(jsonData)}
+        </tbody>
+        </table>`;
+    } else {
+        for (const category in jsonData) {
+            if (jsonData.hasOwnProperty(category)) {
+                htmlContent += `
+                <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
+                <tbody>
+                <tr class="rowlow">
+                <th nowrap rowspan="1" colspan="9" align="left"><a name="${category}"></a> ${category} - Total Entries: ${jsonData[category].length}</th>
+                </tr>
+                    ${generateTableRows(jsonData[category])}
+                </tbody>
+                </table>`;
+            }
+        }
+    }
+
+    htmlContent += `
+    </body>
+    </html>`;
+
+    return htmlContent;
+}
