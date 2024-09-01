@@ -80,7 +80,7 @@ app.get('/archive', async (req, res) => {
         for (let file of files) {
             file_name = file.split(".")[0]; 
             event_info = file_name.split("_");
-            html += `<li><a href="/archive/${file_name}/ui">${file_name}</a></li>`;
+            html += `<li><a href="/archive/ui/${file_name}">${file_name}</a></li>`;
         }
     } catch (err) {
         res.status(500).send('Failed to read archive directory');
@@ -96,6 +96,107 @@ app.get('/archive', async (req, res) => {
 // /archive/<region>_<date> -> get region
 // /archive/<region>_<date>/classes -> get classes
 app.get('/archive/:a?/:b?/:c?', async (req, res) => {
+    getEvents = false;
+    event_key = ""
+    ui = false;
+    ppax = false;
+    getClasses = false;
+    cclass = undefined;
+
+    try{
+        switch (req.params.a.toLowerCase()) {
+            case "events":
+                getEvents = true;
+                break;
+            case "ui":
+                ui = true;
+                break;
+            default:
+                event_key = req.params.a.toUpperCase();
+                break;
+        }
+
+        if(req.params.b && !getEvents){
+            switch (req.params.b.toLowerCase()) {
+                case "classes":
+                    getClasses = true;
+                    break;
+                case "pax":
+                    ppax = true;
+                    break;
+                default:
+                    if(event_key == ""){
+                        event_key = req.params.b.toUpperCase();
+                    }
+                    else {
+                        cclass = req.params.b.toUpperCase();
+                    }
+                    break;
+            }
+        }
+
+        if(req.params.c && !getEvents){
+            switch (req.params.c.toLowerCase()) {
+                case "pax":
+                    ppax = true;
+                    break;
+                default:
+                    cclass = req.params.c.toUpperCase();
+                    break;
+            }
+        }
+
+        if(!ui && getEvents){
+            arr = []
+            let files = await fsp.readdir("archive");
+            for (let file of files) {
+                file = file.split(".")[0];
+                arr.push(file);
+            }
+            res.json(arr);
+            return;
+        }
+        else if(!ui && getClasses){
+            res.json(Object.keys(getJsonData(`archive/${event_key}.json`)));
+            return;
+        }
+
+        if(ui){
+            event_info = event_key.split("_");
+            if(cclass == undefined){
+                if(ppax){
+                    res.send(uiBuilder(pax(getJsonData(`archive/${event_key}.json`)), event_info[0], event_info[1], ppax));
+                }
+                else {
+                    res.send(uiBuilder(getJsonData(`archive/${event_key}.json`), event_info[0], event_info[1], ppax));
+                }
+            }
+            else {
+                res.send(uiBuilder(getJsonData(`archive/${event_key}.json`)[cclass], event_info[0], event_info[1], true, false));
+            }
+            return;
+        }
+        else {
+            if(ppax){
+                res.json(pax(getJsonData(`archive/${event_key}.json`)));
+            }
+            else if(cclass == undefined){
+                res.json((getJsonData(`archive/${event_key}.json`)));
+            }
+            else {
+                res.json((getJsonData(`archive/${event_key}.json`))[cclass]);
+            }
+        }
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Failed to read archive directory');
+        return;
+    }
+
+});
+
+app.get('/aarchive/:a?/:b?/:c?', async (req, res) => {
     getEvents = false;
     event_key = ""
 
@@ -946,7 +1047,7 @@ async function getProntoClasses(url, offset) {
     }
 }
 
-function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(), pax = false) {
+function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(), pax = false, toggle = true) {
     // Function to generate table rows for each entry
     function generateTableRows(entries) {
         let rows = '';
@@ -1010,16 +1111,25 @@ function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(),
         <script>
             function toggleURL() {
                 const currentURL = window.location.href;
-                if (currentURL.includes('/pax/')) {
-                    window.location.href = currentURL.replace('/pax/', '/');
+                const url = new URL(currentURL);
+                const pathParts = url.pathname.split('/');
+
+                if (pathParts.includes('pax')) {
+                    // Remove 'pax' from the path
+                    pathParts.splice(pathParts.indexOf('pax'), 1);
                 } else {
-                    window.location.href = currentURL.replace('/ui', '/pax/ui');
+                    // Add 'pax' to the end of the path
+                    pathParts.push('pax');
                 }
+
+                // Rebuild the URL path and navigate
+                url.pathname = pathParts.join('/');
+                window.location.href = url.toString();
             }
         </script>
     </head>
     <body>
-        <button class="toggle-button" onClick="toggleURL()">Toggle ${pax ? "Class" : "PAX"}</button>
+        <button class="toggle-button" onClick="toggleURL()" style="display: ${toggle ? 'block' : 'none'}">Toggle ${pax ? 'Class' : 'PAX'}</button>
         <h1>${name.toUpperCase()} Results</h1>
         <table class='live' cellpadding='3' cellspacing='1' style='border-collapse: collapse' align='center'>
             <tbody>
