@@ -1082,6 +1082,10 @@ function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(),
         let rows = '';
         entries.forEach((entry, index) => {
             const rowClass = index % 2 === 0 ? 'rowlow' : 'rowhigh';
+            if(entry.times.length > 0){
+                bestTimeIndex = findBestTimeIndex(entry.times);
+                entry.times[bestTimeIndex] = `<b style="border: 1px solid black; padding: 2px; color: black;">${entry.times[bestTimeIndex]}</b>`;
+            }
             rows += `<tr class="${rowClass}">
                 <td nowrap align="center">${entry.position}</td>
                 <td nowrap align="right">${entry.index}</td>
