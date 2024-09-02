@@ -18,10 +18,13 @@ elif [ "$1" == "help" ] || [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
   echo "./docker.sh daemon: Creates container and restarts at boot"
   echo "./docker.sh stop: Stops the container"
   echo "./docker.sh restart: Stops the container"
+  echo "./docker.sh log: Shows docker logs"
   echo "./docker.sh help: Display this message"
 elif [ "$1" == "stop" ]; then
   docker stop "$CONTAINERNAME"
   docker rm "$CONTAINERNAME"
+elif [ "$1" == "log" ]; then
+  docker logs "$CONTAINERNAME"
 elif [ "$1" == "restart" ]; then
   docker stop "$CONTAINERNAME"
   docker rm "$CONTAINERNAME"
