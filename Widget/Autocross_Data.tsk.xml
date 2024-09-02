@@ -1,7 +1,7 @@
 <TaskerData sr="" dvi="1" tv="6.3.13">
 	<Task sr="task3">
 		<cdate>1718417943224</cdate>
-		<edate>1722471825284</edate>
+		<edate>1725243671092</edate>
 		<id>3</id>
 		<nme>Autocross Data</nme>
 		<pri>100</pri>
@@ -10,7 +10,7 @@
 		<Action sr="act0" ve="7">
 			<code>547</code>
 			<Str sr="arg0" ve="3">%class</Str>
-			<Str sr="arg1" ve="3">S2</Str>
+			<Str sr="arg1" ve="3">Pax</Str>
 			<Int sr="arg2" val="0"/>
 			<Int sr="arg3" val="0"/>
 			<Int sr="arg4" val="0"/>
@@ -20,7 +20,7 @@
 		<Action sr="act1" ve="7">
 			<code>547</code>
 			<Str sr="arg0" ve="3">%region</Str>
-			<Str sr="arg1" ve="3">flr</Str>
+			<Str sr="arg1" ve="3">Flr</Str>
 			<Int sr="arg2" val="0"/>
 			<Int sr="arg3" val="0"/>
 			<Int sr="arg4" val="0"/>
@@ -176,17 +176,17 @@
 			<se>false</se>
 			<Bundle sr="arg0">
 				<Vals sr="val">
-					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 2_index</com.twofortyfouram.locale.intent.extra.BLURB>
+					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 2_CarClass</com.twofortyfouram.locale.intent.extra.BLURB>
 					<com.twofortyfouram.locale.intent.extra.BLURB-type>java.lang.String</com.twofortyfouram.locale.intent.extra.BLURB-type>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>org.kustom.tasker.VAR_NAME org.kustom.tasker.VAR_VALUE</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>java.lang.String</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>
 					<net.dinglisch.android.tasker.subbundled>true</net.dinglisch.android.tasker.subbundled>
 					<net.dinglisch.android.tasker.subbundled-type>java.lang.Boolean</net.dinglisch.android.tasker.subbundled-type>
-					<org.kustom.tasker.VAR_NAME>2_index</org.kustom.tasker.VAR_NAME>
+					<org.kustom.tasker.VAR_NAME>2_CarClass</org.kustom.tasker.VAR_NAME>
 					<org.kustom.tasker.VAR_NAME-type>java.lang.String</org.kustom.tasker.VAR_NAME-type>
 					<org.kustom.tasker.VAR_VALUE>%http_data.2.index</org.kustom.tasker.VAR_VALUE>
 					<org.kustom.tasker.VAR_VALUE-type>java.lang.String</org.kustom.tasker.VAR_VALUE-type>
-					<org.kustom.tasker.extra.INT_VERSION_CODE>375410013</org.kustom.tasker.extra.INT_VERSION_CODE>
+					<org.kustom.tasker.extra.INT_VERSION_CODE>376422110</org.kustom.tasker.extra.INT_VERSION_CODE>
 					<org.kustom.tasker.extra.INT_VERSION_CODE-type>java.lang.Integer</org.kustom.tasker.extra.INT_VERSION_CODE-type>
 				</Vals>
 			</Bundle>
@@ -377,17 +377,17 @@
 			<se>false</se>
 			<Bundle sr="arg0">
 				<Vals sr="val">
-					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 3_index</com.twofortyfouram.locale.intent.extra.BLURB>
+					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 3_CarClass</com.twofortyfouram.locale.intent.extra.BLURB>
 					<com.twofortyfouram.locale.intent.extra.BLURB-type>java.lang.String</com.twofortyfouram.locale.intent.extra.BLURB-type>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>org.kustom.tasker.VAR_NAME org.kustom.tasker.VAR_VALUE</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>java.lang.String</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>
 					<net.dinglisch.android.tasker.subbundled>true</net.dinglisch.android.tasker.subbundled>
 					<net.dinglisch.android.tasker.subbundled-type>java.lang.Boolean</net.dinglisch.android.tasker.subbundled-type>
-					<org.kustom.tasker.VAR_NAME>3_index</org.kustom.tasker.VAR_NAME>
+					<org.kustom.tasker.VAR_NAME>3_CarClass</org.kustom.tasker.VAR_NAME>
 					<org.kustom.tasker.VAR_NAME-type>java.lang.String</org.kustom.tasker.VAR_NAME-type>
 					<org.kustom.tasker.VAR_VALUE>%http_data.3.index</org.kustom.tasker.VAR_VALUE>
 					<org.kustom.tasker.VAR_VALUE-type>java.lang.String</org.kustom.tasker.VAR_VALUE-type>
-					<org.kustom.tasker.extra.INT_VERSION_CODE>375410013</org.kustom.tasker.extra.INT_VERSION_CODE>
+					<org.kustom.tasker.extra.INT_VERSION_CODE>376422110</org.kustom.tasker.extra.INT_VERSION_CODE>
 					<org.kustom.tasker.extra.INT_VERSION_CODE-type>java.lang.Integer</org.kustom.tasker.extra.INT_VERSION_CODE-type>
 				</Vals>
 			</Bundle>
@@ -541,7 +541,7 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 			<Int sr="arg10" val="0"/>
 			<Int sr="arg11" val="0"/>
 			<Int sr="arg12" val="1"/>
-			<Str sr="arg2" ve="3">http://74.47.32.227:8001/%region/%class</Str>
+			<Str sr="arg2" ve="3">http://74.47.32.227:8001/widget/%region/%class</Str>
 			<Str sr="arg3" ve="3"/>
 			<Str sr="arg4" ve="3"/>
 			<Str sr="arg5" ve="3"/>
@@ -603,17 +603,17 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 			<se>false</se>
 			<Bundle sr="arg0">
 				<Vals sr="val">
-					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 4_index</com.twofortyfouram.locale.intent.extra.BLURB>
+					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 4_CarClass</com.twofortyfouram.locale.intent.extra.BLURB>
 					<com.twofortyfouram.locale.intent.extra.BLURB-type>java.lang.String</com.twofortyfouram.locale.intent.extra.BLURB-type>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>org.kustom.tasker.VAR_NAME org.kustom.tasker.VAR_VALUE</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>java.lang.String</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>
 					<net.dinglisch.android.tasker.subbundled>true</net.dinglisch.android.tasker.subbundled>
 					<net.dinglisch.android.tasker.subbundled-type>java.lang.Boolean</net.dinglisch.android.tasker.subbundled-type>
-					<org.kustom.tasker.VAR_NAME>4_index</org.kustom.tasker.VAR_NAME>
+					<org.kustom.tasker.VAR_NAME>4_CarClass</org.kustom.tasker.VAR_NAME>
 					<org.kustom.tasker.VAR_NAME-type>java.lang.String</org.kustom.tasker.VAR_NAME-type>
 					<org.kustom.tasker.VAR_VALUE>%http_data.4.index</org.kustom.tasker.VAR_VALUE>
 					<org.kustom.tasker.VAR_VALUE-type>java.lang.String</org.kustom.tasker.VAR_VALUE-type>
-					<org.kustom.tasker.extra.INT_VERSION_CODE>375410013</org.kustom.tasker.extra.INT_VERSION_CODE>
+					<org.kustom.tasker.extra.INT_VERSION_CODE>376422110</org.kustom.tasker.extra.INT_VERSION_CODE>
 					<org.kustom.tasker.extra.INT_VERSION_CODE-type>java.lang.Integer</org.kustom.tasker.extra.INT_VERSION_CODE-type>
 				</Vals>
 			</Bundle>
@@ -661,7 +661,7 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 					<org.kustom.tasker.VAR_NAME-type>java.lang.String</org.kustom.tasker.VAR_NAME-type>
 					<org.kustom.tasker.VAR_VALUE>%http_data.4.pax</org.kustom.tasker.VAR_VALUE>
 					<org.kustom.tasker.VAR_VALUE-type>java.lang.String</org.kustom.tasker.VAR_VALUE-type>
-					<org.kustom.tasker.extra.INT_VERSION_CODE>375410013</org.kustom.tasker.extra.INT_VERSION_CODE>
+					<org.kustom.tasker.extra.INT_VERSION_CODE>376422110</org.kustom.tasker.extra.INT_VERSION_CODE>
 					<org.kustom.tasker.extra.INT_VERSION_CODE-type>java.lang.Integer</org.kustom.tasker.extra.INT_VERSION_CODE-type>
 				</Vals>
 			</Bundle>
@@ -815,7 +815,7 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 			<Int sr="arg10" val="0"/>
 			<Int sr="arg11" val="0"/>
 			<Int sr="arg12" val="1"/>
-			<Str sr="arg2" ve="3">http://192.168.4.199:8000/%region/%class</Str>
+			<Str sr="arg2" ve="3">http://192.168.4.199:8000/widget/%region/%class</Str>
 			<Str sr="arg3" ve="3"/>
 			<Str sr="arg4" ve="3"/>
 			<Str sr="arg5" ve="3"/>
@@ -829,17 +829,17 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 			<se>false</se>
 			<Bundle sr="arg0">
 				<Vals sr="val">
-					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 5_index</com.twofortyfouram.locale.intent.extra.BLURB>
+					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 5_CarClass</com.twofortyfouram.locale.intent.extra.BLURB>
 					<com.twofortyfouram.locale.intent.extra.BLURB-type>java.lang.String</com.twofortyfouram.locale.intent.extra.BLURB-type>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>org.kustom.tasker.VAR_NAME org.kustom.tasker.VAR_VALUE</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>java.lang.String</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>
 					<net.dinglisch.android.tasker.subbundled>true</net.dinglisch.android.tasker.subbundled>
 					<net.dinglisch.android.tasker.subbundled-type>java.lang.Boolean</net.dinglisch.android.tasker.subbundled-type>
-					<org.kustom.tasker.VAR_NAME>5_index</org.kustom.tasker.VAR_NAME>
+					<org.kustom.tasker.VAR_NAME>5_CarClass</org.kustom.tasker.VAR_NAME>
 					<org.kustom.tasker.VAR_NAME-type>java.lang.String</org.kustom.tasker.VAR_NAME-type>
 					<org.kustom.tasker.VAR_VALUE>%http_data.5.index</org.kustom.tasker.VAR_VALUE>
 					<org.kustom.tasker.VAR_VALUE-type>java.lang.String</org.kustom.tasker.VAR_VALUE-type>
-					<org.kustom.tasker.extra.INT_VERSION_CODE>375410013</org.kustom.tasker.extra.INT_VERSION_CODE>
+					<org.kustom.tasker.extra.INT_VERSION_CODE>376422110</org.kustom.tasker.extra.INT_VERSION_CODE>
 					<org.kustom.tasker.extra.INT_VERSION_CODE-type>java.lang.Integer</org.kustom.tasker.extra.INT_VERSION_CODE-type>
 				</Vals>
 			</Bundle>
@@ -1021,17 +1021,17 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 			<se>false</se>
 			<Bundle sr="arg0">
 				<Vals sr="val">
-					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 6_index</com.twofortyfouram.locale.intent.extra.BLURB>
+					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 6_CarClass</com.twofortyfouram.locale.intent.extra.BLURB>
 					<com.twofortyfouram.locale.intent.extra.BLURB-type>java.lang.String</com.twofortyfouram.locale.intent.extra.BLURB-type>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>org.kustom.tasker.VAR_NAME org.kustom.tasker.VAR_VALUE</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>java.lang.String</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>
 					<net.dinglisch.android.tasker.subbundled>true</net.dinglisch.android.tasker.subbundled>
 					<net.dinglisch.android.tasker.subbundled-type>java.lang.Boolean</net.dinglisch.android.tasker.subbundled-type>
-					<org.kustom.tasker.VAR_NAME>6_index</org.kustom.tasker.VAR_NAME>
+					<org.kustom.tasker.VAR_NAME>6_CarClass</org.kustom.tasker.VAR_NAME>
 					<org.kustom.tasker.VAR_NAME-type>java.lang.String</org.kustom.tasker.VAR_NAME-type>
 					<org.kustom.tasker.VAR_VALUE>%http_data.6.index</org.kustom.tasker.VAR_VALUE>
 					<org.kustom.tasker.VAR_VALUE-type>java.lang.String</org.kustom.tasker.VAR_VALUE-type>
-					<org.kustom.tasker.extra.INT_VERSION_CODE>375410013</org.kustom.tasker.extra.INT_VERSION_CODE>
+					<org.kustom.tasker.extra.INT_VERSION_CODE>376422110</org.kustom.tasker.extra.INT_VERSION_CODE>
 					<org.kustom.tasker.extra.INT_VERSION_CODE-type>java.lang.Integer</org.kustom.tasker.extra.INT_VERSION_CODE-type>
 				</Vals>
 			</Bundle>
@@ -1228,17 +1228,17 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 			<se>false</se>
 			<Bundle sr="arg0">
 				<Vals sr="val">
-					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 7_index</com.twofortyfouram.locale.intent.extra.BLURB>
+					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 7_CarClass</com.twofortyfouram.locale.intent.extra.BLURB>
 					<com.twofortyfouram.locale.intent.extra.BLURB-type>java.lang.String</com.twofortyfouram.locale.intent.extra.BLURB-type>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>org.kustom.tasker.VAR_NAME org.kustom.tasker.VAR_VALUE</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>java.lang.String</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>
 					<net.dinglisch.android.tasker.subbundled>true</net.dinglisch.android.tasker.subbundled>
 					<net.dinglisch.android.tasker.subbundled-type>java.lang.Boolean</net.dinglisch.android.tasker.subbundled-type>
-					<org.kustom.tasker.VAR_NAME>7_index</org.kustom.tasker.VAR_NAME>
+					<org.kustom.tasker.VAR_NAME>7_CarClass</org.kustom.tasker.VAR_NAME>
 					<org.kustom.tasker.VAR_NAME-type>java.lang.String</org.kustom.tasker.VAR_NAME-type>
 					<org.kustom.tasker.VAR_VALUE>%http_data.7.index</org.kustom.tasker.VAR_VALUE>
 					<org.kustom.tasker.VAR_VALUE-type>java.lang.String</org.kustom.tasker.VAR_VALUE-type>
-					<org.kustom.tasker.extra.INT_VERSION_CODE>375410013</org.kustom.tasker.extra.INT_VERSION_CODE>
+					<org.kustom.tasker.extra.INT_VERSION_CODE>376422110</org.kustom.tasker.extra.INT_VERSION_CODE>
 					<org.kustom.tasker.extra.INT_VERSION_CODE-type>java.lang.Integer</org.kustom.tasker.extra.INT_VERSION_CODE-type>
 				</Vals>
 			</Bundle>
@@ -1444,17 +1444,17 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 			<se>false</se>
 			<Bundle sr="arg0">
 				<Vals sr="val">
-					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 8_index</com.twofortyfouram.locale.intent.extra.BLURB>
+					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 8_CarClass</com.twofortyfouram.locale.intent.extra.BLURB>
 					<com.twofortyfouram.locale.intent.extra.BLURB-type>java.lang.String</com.twofortyfouram.locale.intent.extra.BLURB-type>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>org.kustom.tasker.VAR_NAME org.kustom.tasker.VAR_VALUE</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>java.lang.String</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>
 					<net.dinglisch.android.tasker.subbundled>true</net.dinglisch.android.tasker.subbundled>
 					<net.dinglisch.android.tasker.subbundled-type>java.lang.Boolean</net.dinglisch.android.tasker.subbundled-type>
-					<org.kustom.tasker.VAR_NAME>8_index</org.kustom.tasker.VAR_NAME>
+					<org.kustom.tasker.VAR_NAME>8_CarClass</org.kustom.tasker.VAR_NAME>
 					<org.kustom.tasker.VAR_NAME-type>java.lang.String</org.kustom.tasker.VAR_NAME-type>
 					<org.kustom.tasker.VAR_VALUE>%http_data.8.index</org.kustom.tasker.VAR_VALUE>
 					<org.kustom.tasker.VAR_VALUE-type>java.lang.String</org.kustom.tasker.VAR_VALUE-type>
-					<org.kustom.tasker.extra.INT_VERSION_CODE>375410013</org.kustom.tasker.extra.INT_VERSION_CODE>
+					<org.kustom.tasker.extra.INT_VERSION_CODE>376422110</org.kustom.tasker.extra.INT_VERSION_CODE>
 					<org.kustom.tasker.extra.INT_VERSION_CODE-type>java.lang.Integer</org.kustom.tasker.extra.INT_VERSION_CODE-type>
 				</Vals>
 			</Bundle>
@@ -1660,17 +1660,17 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 			<se>false</se>
 			<Bundle sr="arg0">
 				<Vals sr="val">
-					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 9_index</com.twofortyfouram.locale.intent.extra.BLURB>
+					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 9_CarClass</com.twofortyfouram.locale.intent.extra.BLURB>
 					<com.twofortyfouram.locale.intent.extra.BLURB-type>java.lang.String</com.twofortyfouram.locale.intent.extra.BLURB-type>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>org.kustom.tasker.VAR_NAME org.kustom.tasker.VAR_VALUE</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>java.lang.String</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>
 					<net.dinglisch.android.tasker.subbundled>true</net.dinglisch.android.tasker.subbundled>
 					<net.dinglisch.android.tasker.subbundled-type>java.lang.Boolean</net.dinglisch.android.tasker.subbundled-type>
-					<org.kustom.tasker.VAR_NAME>9_index</org.kustom.tasker.VAR_NAME>
+					<org.kustom.tasker.VAR_NAME>9_CarClass</org.kustom.tasker.VAR_NAME>
 					<org.kustom.tasker.VAR_NAME-type>java.lang.String</org.kustom.tasker.VAR_NAME-type>
 					<org.kustom.tasker.VAR_VALUE>%http_data.9.index</org.kustom.tasker.VAR_VALUE>
 					<org.kustom.tasker.VAR_VALUE-type>java.lang.String</org.kustom.tasker.VAR_VALUE-type>
-					<org.kustom.tasker.extra.INT_VERSION_CODE>375410013</org.kustom.tasker.extra.INT_VERSION_CODE>
+					<org.kustom.tasker.extra.INT_VERSION_CODE>376422110</org.kustom.tasker.extra.INT_VERSION_CODE>
 					<org.kustom.tasker.extra.INT_VERSION_CODE-type>java.lang.Integer</org.kustom.tasker.extra.INT_VERSION_CODE-type>
 				</Vals>
 			</Bundle>
@@ -1852,17 +1852,17 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 			<se>false</se>
 			<Bundle sr="arg0">
 				<Vals sr="val">
-					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 1_index</com.twofortyfouram.locale.intent.extra.BLURB>
+					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 1_CarClass</com.twofortyfouram.locale.intent.extra.BLURB>
 					<com.twofortyfouram.locale.intent.extra.BLURB-type>java.lang.String</com.twofortyfouram.locale.intent.extra.BLURB-type>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>org.kustom.tasker.VAR_NAME org.kustom.tasker.VAR_VALUE</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>java.lang.String</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>
 					<net.dinglisch.android.tasker.subbundled>true</net.dinglisch.android.tasker.subbundled>
 					<net.dinglisch.android.tasker.subbundled-type>java.lang.Boolean</net.dinglisch.android.tasker.subbundled-type>
-					<org.kustom.tasker.VAR_NAME>1_index</org.kustom.tasker.VAR_NAME>
+					<org.kustom.tasker.VAR_NAME>1_CarClass</org.kustom.tasker.VAR_NAME>
 					<org.kustom.tasker.VAR_NAME-type>java.lang.String</org.kustom.tasker.VAR_NAME-type>
 					<org.kustom.tasker.VAR_VALUE>%http_data.1.index</org.kustom.tasker.VAR_VALUE>
 					<org.kustom.tasker.VAR_VALUE-type>java.lang.String</org.kustom.tasker.VAR_VALUE-type>
-					<org.kustom.tasker.extra.INT_VERSION_CODE>375410013</org.kustom.tasker.extra.INT_VERSION_CODE>
+					<org.kustom.tasker.extra.INT_VERSION_CODE>376422110</org.kustom.tasker.extra.INT_VERSION_CODE>
 					<org.kustom.tasker.extra.INT_VERSION_CODE-type>java.lang.Integer</org.kustom.tasker.extra.INT_VERSION_CODE-type>
 				</Vals>
 			</Bundle>
@@ -1876,17 +1876,17 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 			<se>false</se>
 			<Bundle sr="arg0">
 				<Vals sr="val">
-					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 10_index</com.twofortyfouram.locale.intent.extra.BLURB>
+					<com.twofortyfouram.locale.intent.extra.BLURB>Set: 10_CarClass</com.twofortyfouram.locale.intent.extra.BLURB>
 					<com.twofortyfouram.locale.intent.extra.BLURB-type>java.lang.String</com.twofortyfouram.locale.intent.extra.BLURB-type>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>org.kustom.tasker.VAR_NAME org.kustom.tasker.VAR_VALUE</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS>
 					<net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>java.lang.String</net.dinglisch.android.tasker.extras.VARIABLE_REPLACE_KEYS-type>
 					<net.dinglisch.android.tasker.subbundled>true</net.dinglisch.android.tasker.subbundled>
 					<net.dinglisch.android.tasker.subbundled-type>java.lang.Boolean</net.dinglisch.android.tasker.subbundled-type>
-					<org.kustom.tasker.VAR_NAME>10_index</org.kustom.tasker.VAR_NAME>
+					<org.kustom.tasker.VAR_NAME>10_CarClass</org.kustom.tasker.VAR_NAME>
 					<org.kustom.tasker.VAR_NAME-type>java.lang.String</org.kustom.tasker.VAR_NAME-type>
 					<org.kustom.tasker.VAR_VALUE>%http_data.10.index</org.kustom.tasker.VAR_VALUE>
 					<org.kustom.tasker.VAR_VALUE-type>java.lang.String</org.kustom.tasker.VAR_VALUE-type>
-					<org.kustom.tasker.extra.INT_VERSION_CODE>375410013</org.kustom.tasker.extra.INT_VERSION_CODE>
+					<org.kustom.tasker.extra.INT_VERSION_CODE>376422110</org.kustom.tasker.extra.INT_VERSION_CODE>
 					<org.kustom.tasker.extra.INT_VERSION_CODE-type>java.lang.Integer</org.kustom.tasker.extra.INT_VERSION_CODE-type>
 				</Vals>
 			</Bundle>
@@ -2065,7 +2065,7 @@ The size of the response in bytes&lt;/_array_net.dinglisch.android.tasker.RELEVA
 		<Action sr="act88" ve="7">
 			<code>30</code>
 			<Int sr="arg0" val="0"/>
-			<Int sr="arg1" val="30"/>
+			<Int sr="arg1" val="15"/>
 			<Int sr="arg2" val="0"/>
 			<Int sr="arg3" val="0"/>
 			<Int sr="arg4" val="0"/>
