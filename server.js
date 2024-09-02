@@ -113,13 +113,15 @@ app.get('/archive', async (req, res) => {
 
         let files = await fsp.readdir("archive");
         for (let file of files) {
-            const fileName = file.split(".")[0]; 
-            html += `
-                <li>
-                    <a href="/archive/ui/${fileName}">${fileName}</a>
-                </li>
-            `;
-        }        
+            if(file.includes(".json")){
+                const fileName = file.split(".")[0];
+                html += `
+                    <li>
+                        <a href="/archive/ui/${fileName}">${fileName}</a>
+                    </li>
+                `;
+            }
+        }
         html += `
         <li>
             <a style="background-color: #ff0000" href="/">Main Page</a>
@@ -173,10 +175,6 @@ app.get('/', async (req, res) => {
 
     res.send(html);
 });
-
-
-
-
 
 // /archive/events -> get events
 // /archive/<region>_<date> -> get region
@@ -236,8 +234,10 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
             arr = []
             let files = await fsp.readdir("archive");
             for (let file of files) {
-                file = file.split(".")[0];
-                arr.push(file);
+                file = file.split(".");
+                if(file[1] == "json"){
+                    arr.push(file[0]);
+                }
             }
             res.json(arr);
             return;
@@ -276,7 +276,7 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
 
     } catch (err) {
         console.error(err);
-        res.status(500).send('Failed to read archive directory');
+        res.status(500).send('Failed to read archive directory', err);
         return;
     }
 
@@ -338,7 +338,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         if (!tour && !regions.hasOwnProperty(region)) {
             ret = new_results(widget);
             ret["1"].driver = "Region not found " + region;
-            res.json(ret);
+            res.status(500).json(ret);
             return;
         }
 
@@ -379,14 +379,14 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         else {
             ret = new_results(widget);
             ret["1"].driver = "Timing Software not defined";
-            res.json(ret);
+            res.status(500).json(ret);
             return;
         }
     } catch (error) {
         console.error(error);
         ret = new_results();
         ret["1"].driver = "Error fetching data";
-        res.json(ret);
+        res.status(500).json(ret);
     }
 });
 
@@ -598,7 +598,7 @@ async function pronto(region_name, region, cclass, widget = false) {
         let valid = true;
         results[currentClass] = new_results(widget);
 
-        
+
         start_index = region.data.row_offset ? region.data.row_offset : 1;
         for (index = start_index; index < parse.length; index++) {
             temp = {}
@@ -1188,7 +1188,7 @@ function toggleURL() {
         <tr class="rowlow">
         <th nowrap rowspan="1" colspan="9" align="left"><a name="PAX"></a> PAX - Total Entries: ${jsonData.length}</th>
         </tr>
-        
+
         ${generateTableRows(jsonData)}
         </tbody>
         </table>`;
