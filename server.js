@@ -3,10 +3,6 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const cron = require('node-cron');
 const fs = require('fs');
-const { get, setMaxIdleHTTPParsers } = require('http');
-const { arch } = require('os');
-const { time, info } = require('console');
-const e = require('express');
 const fsp = require('fs').promises;
 
 const app = express();
@@ -14,11 +10,7 @@ const PORT = 8000;
 
 // Middleware for redirection
 app.use((req, res, next) => {
-    if (req.path === '/') { // Checking if the request path is the root
-        res.redirect("/archive");
-    } else {
-        next(); // Continue to other routes if not the root
-    }
+    next();
 });
 
 // Function to read and parse the JSON file
@@ -61,36 +53,130 @@ cron.schedule('30 2 * * 0', () => {
 app.use(express.static('public')); // Serve static files from the public directory
 app.use('/archive', express.static("archive")); // Serve static files from the archive directory
 
+style = `  <style>
+                body {
+                    margin: 0;
+                    padding: 0;
+                    font-family: Arial, sans-serif;
+                    background-color: #e6e6e8;
+                }
+                .container {
+                    padding: 20px;
+                }
+                h1 {
+                    margin: 0 0 20px 0;
+                    font-size: 24px;
+                    color: #333;
+                }
+                ul {
+                    list-style: none;
+                    padding: 0;
+                }
+                li {
+                    margin-bottom: 10px;
+                    display: flex;
+                    justify-content: center; /* Center the button */
+                }
+                a {
+                    display: block;
+                    width: 25%; /* Each button takes 25% of the total width */
+                    padding: 10px 15px;
+                    background-color: #007BFF;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    text-align: center;
+                    margin-left: 10px;
+                }
+                a:hover {
+                    background-color: #0056b3;
+                }
+            </style>`;
+
 // Route to list all archived files
 app.get('/archive', async (req, res) => {
-    let html = '';
-    html += '<h1>Autocross</h1>';
-    html += '<ul>';
-    for (let region in regions) {
-        html += `<li><a href="${regions[region].url}">${region}</a></li>`;
-        html += `<br>`;
-    }
-    html += '</ul>';
-    html += '<br><br>';
-    html += '<h1>Archived Files</h1>';
-    html += '<ul>';
+    let html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            ${style}
+        </head>
+        <body>
+            <div class="container">
+                <h1>Archived Files</h1>
+                <ul>
+    `;
 
     try {
+
         let files = await fsp.readdir("archive");
         for (let file of files) {
-            file_name = file.split(".")[0]; 
-            event_info = file_name.split("_");
-            html += `<li><a href="/archive/ui/${file_name}">${file_name}</a></li>`;
-        }
+            const fileName = file.split(".")[0]; 
+            html += `
+                <li>
+                    <a href="/archive/ui/${fileName}">${fileName}</a>
+                </li>
+            `;
+        }        
+        html += `
+        <li>
+            <a style="background-color: #ff0000" href="/">Main Page</a>
+        </li>
+    `;
     } catch (err) {
         res.status(500).send('Failed to read archive directory');
         return;
     }
 
-    html += '</ul>';
+    html += `
+                </ul>
+            </div>
+        </body>
+        </html>
+    `;
 
     res.send(html);
 });
+
+
+app.get('/', async (req, res) => {
+    let html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            ${style}
+        </head>
+        <body>
+            <div class="container">
+                <h1>Autocross</h1>
+                <ul>
+                    ${Object.keys(regions).map(region => `
+                        <li>
+                            <a href="ui/${region}">${region}</a>
+                            <a href="${regions[region].url}">${regions[region].software}</a>
+                        </li>
+                    `).join('')}
+                </ul>
+                <ul>
+                    <li>
+                        <a href="/archive">Archive</a>
+                    </li>
+                </ul>
+            </div>
+        </body>
+        </html>
+    `;
+
+    res.send(html);
+});
+
+
+
+
 
 // /archive/events -> get events
 // /archive/<region>_<date> -> get region
@@ -196,81 +282,6 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
 
 });
 
-app.get('/aarchive/:a?/:b?/:c?', async (req, res) => {
-    getEvents = false;
-    event_key = ""
-
-    try {
-        // TODO: this needs to be cleaned up #badcode
-        if(req.params.a){
-            if(req.params.a.toLowerCase() == "events"){
-                getEvents = true;
-            }
-            else{
-                event_key = req.params.a.toUpperCase();
-            }
-        }
-        if(req.params.b && !getEvents){
-            if(req.params.b.toLowerCase() == "classes"){
-                res.json(Object.keys(getJsonData(`archive/${event_key}.json`)));
-            }
-            if(req.params.b.toLowerCase() == "ui"){
-                event_info = event_key.split("_");
-                res.send(uiBuilder(getJsonData(`archive/${event_key}.json`), event_info[0], event_info[1], false));
-                return;
-            }
-            if(req.params.b.toLowerCase() == "pax"){
-                event_info = event_key.split("_");
-                if(req.params.c && !getEvents){
-                    if(req.params.c.toLowerCase() == "ui"){
-                        event_info = event_key.split("_");
-                        res.send(uiBuilder(pax(getJsonData(`archive/${event_key}.json`), false), event_info[0], event_info[1], true));
-                    }
-                }
-                else if(!getEvents){
-                    res.json(pax(getJsonData(`archive/${event_key}.json`)));
-                }
-            }
-            else {
-                cclass = req.params.b.toUpperCase();
-                res.json((getJsonData(`archive/${event_key}.json`))[cclass]);
-            }
-        }
-        else if(!req.params.b && !getEvents){
-            res.json((getJsonData(`archive/${event_key}.json`)));
-        }
-        else if(req.params.c && !getEvents && req.params.c.toLowerCase() == "ui"){
-            event_info = event_key.split("_")[0];
-            res.send(uiBuilder(getJsonData(`archive/${event_key}.json`)[cclass], event_info[0], event_info[1], false));
-            return;
-        }
-        else if(!getEvents) {
-            res.status(500).send('Incorrect querry');
-        }
-    }  catch (err) {
-        console.log(err)
-        res.status(500).send('Failed to find event, ' + err);
-        return;
-    }
-
-    try {
-        if(getEvents){
-            arr = []
-            let files = await fsp.readdir("archive");
-            for (let file of files) {
-                file = file.split(".")[0];
-                arr.push(file);
-            }
-            res.json(arr);
-    }
-    } catch (err) {
-        res.status(500).send('Failed to read archive directory');
-        return;
-    }
-
-});
-
-
 color_newTime = "#d7d955"
 color_upPos = "#4fb342"
 color_downPos = "#d14545"
@@ -281,6 +292,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
 // app.get('/:widget?/:region/:class?', async (req, res) => {
     let widget = false;
     let tour = false;
+    let ui = false;
     let tourType = "";
     let region = "";
     let cclass = "";
@@ -289,6 +301,9 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         switch (req.params.a.toUpperCase()) {
             case "WIDGET":
                 widget = true;
+                break;
+            case "UI":
+                ui = true;
                 break;
             default:
                 region = req.params.a.toUpperCase();
@@ -307,11 +322,11 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             }
         }
 
-        if(widget && tour){
+        if((widget && tour) || (ui && tour)){
             region = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
             cclass = req.params.d != undefined ? req.params.d.toUpperCase() : undefined;
         }
-        else if(widget || tour){
+        else if(widget || tour || ui){
             region = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
             cclass = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
         }
@@ -322,7 +337,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
 
         if (!tour && !regions.hasOwnProperty(region)) {
             ret = new_results(widget);
-            ret["1"].driver = "Region not found";
+            ret["1"].driver = "Region not found " + region;
             res.json(ret);
             return;
         }
@@ -341,11 +356,25 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             region_dict = regions[region];
         }
 
+        ppax = cclass != undefined ? true : false;
+        toggle = cclass != undefined && cclass != "PAX" ? false : true;
         if(region_dict.software == "axware"){
-            res.json(await axware(region, region_dict, cclass, widget));
+            data = await axware(region, region_dict, cclass, widget)
+            if(ui){
+                res.send(uiBuilder(data, region, new Date().toLocaleString(), ppax, toggle));
+            }
+            else {
+                res.json(data);
+            }
         }
         else if(region_dict.software == "pronto"){
-            res.json(await pronto(region, region_dict, cclass, widget));
+            data = await pronto(region, region_dict, cclass, widget)
+            if(ui){
+                res.send(uiBuilder(data, region, new Date().toLocaleString(), ppax, toggle));
+            }
+            else {
+                res.json(data);
+            }
         }
         else {
             ret = new_results(widget);
@@ -1109,23 +1138,23 @@ function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(),
             }
         </style>
         <script>
-            function toggleURL() {
-                const currentURL = window.location.href;
-                const url = new URL(currentURL);
-                const pathParts = url.pathname.split('/');
+function toggleURL() {
+    const currentURL = window.location.href;
+    const url = new URL(currentURL);
+    let pathParts = url.pathname.split('/').filter(part => part !== ''); // Remove empty parts
 
-                if (pathParts.includes('pax')) {
-                    // Remove 'pax' from the path
-                    pathParts.splice(pathParts.indexOf('pax'), 1);
-                } else {
-                    // Add 'pax' to the end of the path
-                    pathParts.push('pax');
-                }
+    if (pathParts.includes('pax')) {
+        // Remove 'pax' from the path
+        pathParts.splice(pathParts.indexOf('pax'), 1);
+    } else {
+        // Add 'pax' to the end of the path
+        pathParts.push('pax');
+    }
 
-                // Rebuild the URL path and navigate
-                url.pathname = pathParts.join('/');
-                window.location.href = url.toString();
-            }
+    // Rebuild the URL path and navigate, ensuring no trailing slash unless it's the root
+    url.pathname = '/' + pathParts.join('/');
+    window.location.href = url.toString();
+}
         </script>
     </head>
     <body>
