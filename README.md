@@ -1,6 +1,6 @@
 # Autocross API
 
-Welcome to the Autocross API documentation. This API provides access to real-time and archived data for autocross events. You can retrieve data based on regions, classes, or PAX (Performance Adjusted Index). Additionally, data for specific events can be accessed through the archive endpoints.
+Welcome to the Autocross API. This API provides access to real-time and archived data for autocross events. You can retrieve data based on regions, classes, or PAX (Performance Adjusted Index). Additionally, data for specific events can be accessed through the archive endpoints.
 
 ## Setup
 
