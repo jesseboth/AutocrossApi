@@ -94,7 +94,7 @@ style = `  <style>
             </style>`;
 
 // Route to list all archived files
-app.get('/archive/ui?', async (req, res) => {
+app.get('/archive', async (req, res) => {
     let html = `
         <!DOCTYPE html>
         <html lang="en">
@@ -143,7 +143,7 @@ app.get('/archive/ui?', async (req, res) => {
 });
 
 
-app.get('/ui?', async (req, res) => {
+app.get('/', async (req, res) => {
     let html = `
         <!DOCTYPE html>
         <html lang="en">
@@ -251,6 +251,10 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
         }
 
         if(ui){
+            if(!event_key){
+                res.redirect('/archive');
+                return;
+            }
             event_info = event_key.split("_");
             if(cclass == undefined){
                 if(ppax){
@@ -336,6 +340,11 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         else{
             region = req.params.a != undefined ? req.params.a.toUpperCase() : undefined;
             cclass = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
+        }
+
+        if(ui && !region){
+            res.redirect('/');
+            return;
         }
 
         if (!tour && !regions.hasOwnProperty(region)) {
@@ -507,7 +516,9 @@ async function axware(region_name, region, cclass, widget = false) {
                     // put me in 10th if I am outisde top 10
                     results[temp.class]["10"] = { ...temp }
                 }
-                stats[temp.driver] = { "position": intPosition, "runs": runs }
+                if(widget){
+                    stats[temp.driver] = { "position": intPosition, "runs": runs }
+                }
                 temp = {}
             }
             else {
@@ -710,7 +721,9 @@ async function pronto(region_name, region, cclass, widget = false) {
                     results[temp.class]["10"] = { ...temp }
                     results[temp.class]["10"].class = store;
                 }
-                stats[temp.driver] = { "position": intPosition, "runs": runs }
+                if(widget){
+                    stats[temp.driver] = { "position": intPosition, "runs": runs }
+                }
                 temp = {}
             }
             else {
@@ -744,9 +757,8 @@ async function pronto(region_name, region, cclass, widget = false) {
 
 function new_results(widget) {
 
-    const not_found = "Class not found";
     if (!widget) {
-        return {"1": {"driver": not_found}}
+        return {}
     }
 
     return {
@@ -1093,7 +1105,7 @@ function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(),
                 entry.times[bestTimeIndex] = `<b style="border: 1px solid black; padding: 2px; color: black;">${entry.times[bestTimeIndex]}</b>`;
             }
             numTimes = entry.times.length/2;
-            numTimes = numTimes > 3 ? numTimes : 3;
+            numTimes = numTimes == 0 ? 0 : numTimes > 3 ? numTimes : 3;
             rows += `<tr class="${rowClass}">
                 <td nowrap align="center">${entry.position}</td>
                 <td nowrap align="right">${entry.index}</td>
