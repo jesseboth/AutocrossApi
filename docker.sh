@@ -6,7 +6,6 @@ PORT="8001"
 
 SCRIPT_DIR=$(realpath $(dirname "$0"))
 VOLUMES="-v ${SCRIPT_DIR}/archive:/usr/src/app/archive \
-         -v ${SCRIPT_DIR}/archiveOther:/usr/src/app/archiveOther \
 "
 
 if [ "$1" == "daemon" ]; then
@@ -30,6 +29,9 @@ elif [ "$1" == "restart" ]; then
   docker rm "$CONTAINERNAME"
   docker build -t "$IMAGENAME" .
   docker run -d $VOLUMES -p $PORT:8000 --name "$CONTAINERNAME" "$IMAGENAME"
+elif [ -n "$1" ]; then
+  echo "Unknown command: $1"
+  echo "Try './docker.sh help' for more information."
 else
   docker build -t "$IMAGENAME" .
   docker run -d $VOLUMES -p $PORT:8000 --name "$CONTAINERNAME" "$IMAGENAME"

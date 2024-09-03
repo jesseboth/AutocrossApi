@@ -94,7 +94,7 @@ style = `  <style>
             </style>`;
 
 // Route to list all archived files
-app.get('/archive', async (req, res) => {
+app.get('/archive/ui?', async (req, res) => {
     let html = `
         <!DOCTYPE html>
         <html lang="en">
@@ -128,7 +128,7 @@ app.get('/archive', async (req, res) => {
         </li>
     `;
     } catch (err) {
-        res.status(500).send('Failed to read archive directory');
+        res.status(500).send(errorCode('Failed to read archive directory', false));
         return;
     }
 
@@ -143,7 +143,7 @@ app.get('/archive', async (req, res) => {
 });
 
 
-app.get('/', async (req, res) => {
+app.get('/ui?', async (req, res) => {
     let html = `
         <!DOCTYPE html>
         <html lang="en">
@@ -195,6 +195,9 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
             case "ui":
                 ui = true;
                 break;
+            case "widget":
+                res.status(500).send(errorCode("Widget not available for archived data", true));
+                return;
             default:
                 event_key = req.params.a.toUpperCase();
                 break;
@@ -276,7 +279,7 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
 
     } catch (err) {
         console.error(err);
-        res.status(500).send('Failed to read archive directory', err);
+        res.status(500).send(errorCode(err, false));
         return;
     }
 
@@ -336,9 +339,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         }
 
         if (!tour && !regions.hasOwnProperty(region)) {
-            ret = new_results(widget);
-            ret["1"].driver = "Region not found " + region;
-            res.status(500).json(ret);
+            res.status(500).send(errorCode("Region not found", widget));
             return;
         }
 
@@ -377,21 +378,17 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             }
         }
         else {
-            ret = new_results(widget);
-            ret["1"].driver = "Timing Software not defined";
-            res.status(500).json(ret);
+            res.status(500).send(errorCode("Timing Software not defined", widget));
             return;
         }
     } catch (error) {
         console.error(error);
-        ret = new_results();
-        ret["1"].driver = "Error fetching data";
-        res.status(500).json(ret);
+        res.status(500).json(errorCode(error, widget, "error"));
     }
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
 
 async function axware(region_name, region, cclass, widget = false) {
@@ -529,8 +526,15 @@ async function axware(region_name, region, cclass, widget = false) {
             else if (results.hasOwnProperty(cclass)){
                 return Object.values(results[cclass]);
             }
-            else {
-                return new_results(widget)
+            else if (cclass != "CLASSES") {
+                return errorCode("Class not found", widget);
+            }
+            else if (cclass == "CLASSES") {
+                ret = []
+                for(const key in results){
+                    ret.push(key);
+                }
+                return ret
             }
         }
         else {
@@ -540,22 +544,22 @@ async function axware(region_name, region, cclass, widget = false) {
             return results
         }
     } catch (error) {
-        console.log(error)
-        err = error.stack.split('\n')[0].split(':');
-        results = new_results();
-        results["1"].driver =  err[0];
-        results["1"].number = error.response ? error.response.status : '-1';
-        results["1"].times = err[1];
-        results["1"].color = color_downPos;
-
-        return results;
+        console.error(error)
+        return errorCode(error, widget, "error");
     }
 }
 
 async function pronto(region_name, region, cclass, widget = false) {
     let classes = [cclass];
     if(cclass == undefined){
-        classes = await getProntoClasses(region.url, region.data.classes_offset)
+        if(region_name){
+            class_offset = region_name.includes("NATS") ? region.data.nats_offset : region.data.classes_offset
+        }
+        classes = await getProntoClasses(region.url, class_offset);
+    }
+
+    if(cclass == "CLASSES"){
+        return await getProntoClasses(region.url, class_offset);
     }
 
     if(!event_stats.hasOwnProperty(region_name)){
@@ -598,14 +602,24 @@ async function pronto(region_name, region, cclass, widget = false) {
         let valid = true;
         results[currentClass] = new_results(widget);
 
-
         start_index = region.data.row_offset ? region.data.row_offset : 1;
         for (index = start_index; index < parse.length; index++) {
             temp = {}
             temp.times = []
             bestIndices = []
             for (row = 0; row < format.length; row++) {
+                if(index == start_index){
+                    for(test = 0; test < 5; test++){
+                        let columns = $(parse[index]).find('td');
+                        test_value = $(columns[0]).text().trim();
+                        if(test_value == "T"){
+                            break;
+                        }
+                        index++;
+                    }
+                }
                 let columns = $(parse[index]).find('td');
+
 
                 if (columns.length > 1) {
                     for (col = 0; col < columns.length; col++) {
@@ -723,15 +737,8 @@ async function pronto(region_name, region, cclass, widget = false) {
             return results
         }
     } catch (error) {
-        console.log(error)
-        err = error.stack.split('\n')[0].split(':');
-        results = new_results();
-        results["1"].driver =  err[0];
-        results["1"].number = error.response ? error.response.status : '-1';
-        results["1"].times = err[1];
-        results["1"].color = color_downPos;
-
-        return results;
+        console.error(error)
+        return errorCode(error, widget, "error");
     }
 }
 
@@ -775,7 +782,6 @@ function getYesterdate() {
 //             rname = file.split("_")[0];
 //             region = {...regions[rname]};
 //             region.url = "http://192.168.4.199:8000/archiveOther/" + file;
-//             console.log(region.url)
 //             await archiveJson(rname, region);
 //         }
 //     }
@@ -1086,135 +1092,165 @@ function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(),
                 bestTimeIndex = findBestTimeIndex(entry.times);
                 entry.times[bestTimeIndex] = `<b style="border: 1px solid black; padding: 2px; color: black;">${entry.times[bestTimeIndex]}</b>`;
             }
+            numTimes = entry.times.length/2;
+            numTimes = numTimes > 3 ? numTimes : 3;
             rows += `<tr class="${rowClass}">
                 <td nowrap align="center">${entry.position}</td>
                 <td nowrap align="right">${entry.index}</td>
                 <td nowrap align="right">${entry.number}</td>
                 <td nowrap align="left">${entry.driver}</td>
-                <td nowrap ><font class='bestt'>${entry.pax}</font></td>
-                <td valign="top" nowrap >${entry.times[0] || ''}</td>
-                <td valign="top" nowrap >${entry.times[1] || ''}</td>
-                <td valign="top" nowrap >${entry.times[2] || ''}</td>
-                <td valign="top" nowrap >${entry.times[3] || ''}</td>
+                <td nowrap ><font class='bestt'>${entry.pax}</font></td>`
+                for(i = 0; i < numTimes; i+=1){
+                    rows +=`<td valign="top" nowrap >${entry.times[i] || ''}</td>`
+                 }
+            rows += `
             </tr>
             <tr class="${rowClass}">
                 <td nowrap align="center"></td>
                 <td nowrap align="right"></td>
                 <td nowrap align="right"></td>
                 <td nowrap align="left">${entry.car}</td>
-                <td nowrap >${entry.offset}</td>
-                <td valign="top" nowrap >${entry.times[4] || ''}</td>
-                <td valign="top" nowrap >${entry.times[5] || ''}</td>
-                <td valign="top" nowrap ></td>
-                <td valign="top" nowrap ></td>
-            </tr>`;
+                <td nowrap >${entry.offset}</td>`
+                for(i = numTimes; i < numTimes*2; i+=1){
+                    rows +=`<td valign="top" nowrap >${entry.times[i] || ''}</td>`
+                 }
+
+            rows += `</tr>`;
         });
         return rows;
     }
+    try {
+        // Generate the HTML content
+        let htmlContent = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <title>Updated: ${date}</title>
+            <style>
+                body { margin: 0; padding: 0; width: 98vw; max-width: 100%; font-family: Verdena; }
+                .rowhigh { background-color: #e6e6e8; }
+                .rowlow { background-color: #FFFFFF; }
+                h1, h2, h3 { text-align: center; font-family: Arial; color: #0000FF; }
+                th { color: #FFFFFF; background-color: #152bed; }
+                table { width: 100%; border-collapse: collapse; }
+                th, td { padding: 8px; text-align: center; }
+                a { color: blue; text-decoration: none; }
+                .bestt { font-weight: bold; }
+                .toggle-button {
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    padding: 10px 20px;
+                    background-color: #6495ed;
+                    color: white;
+                    border: none;
+                    cursor: pointer;
+                    font-size: 14px;
+                    border-radius: 5px;
+                }
+            </style>
+            <script>
+    function toggleURL() {
+        const currentURL = window.location.href;
+        const url = new URL(currentURL);
+        let pathParts = url.pathname.split('/').filter(part => part !== ''); // Remove empty parts
 
-    // Generate the HTML content
-    let htmlContent = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <title>Updated: ${date}</title>
-        <style>
-            body { margin: 0; padding: 0; width: 98vw; max-width: 100%; font-family: Verdena; }
-            .rowhigh { background-color: #e6e6e8; }
-            .rowlow { background-color: #FFFFFF; }
-            h1, h2, h3 { text-align: center; font-family: Arial; color: #0000FF; }
-            th { color: #FFFFFF; background-color: #152bed; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { padding: 8px; text-align: center; }
-            a { color: blue; text-decoration: none; }
-            .bestt { font-weight: bold; }
-            .toggle-button {
-                position: absolute;
-                top: 10px;
-                right: 10px;
-                padding: 10px 20px;
-                background-color: #6495ed;
-                color: white;
-                border: none;
-                cursor: pointer;
-                font-size: 14px;
-                border-radius: 5px;
-            }
-        </style>
-        <script>
-function toggleURL() {
-    const currentURL = window.location.href;
-    const url = new URL(currentURL);
-    let pathParts = url.pathname.split('/').filter(part => part !== ''); // Remove empty parts
+        if (pathParts.includes('pax')) {
+            // Remove 'pax' from the path
+            pathParts.splice(pathParts.indexOf('pax'), 1);
+        } else {
+            // Add 'pax' to the end of the path
+            pathParts.push('pax');
+        }
 
-    if (pathParts.includes('pax')) {
-        // Remove 'pax' from the path
-        pathParts.splice(pathParts.indexOf('pax'), 1);
-    } else {
-        // Add 'pax' to the end of the path
-        pathParts.push('pax');
+        // Rebuild the URL path and navigate, ensuring no trailing slash unless it's the root
+        url.pathname = '/' + pathParts.join('/');
+        window.location.href = url.toString();
     }
-
-    // Rebuild the URL path and navigate, ensuring no trailing slash unless it's the root
-    url.pathname = '/' + pathParts.join('/');
-    window.location.href = url.toString();
-}
-        </script>
-    </head>
-    <body>
-        <button class="toggle-button" onClick="toggleURL()" style="display: ${toggle ? 'block' : 'none'}">Toggle ${pax ? 'Class' : 'PAX'}</button>
-        <h1>${name.toUpperCase()} Results</h1>
-        <table class='live' cellpadding='3' cellspacing='1' style='border-collapse: collapse' align='center'>
-            <tbody>
-                <tr class="rowlow">
-                    <th nowrap align="center">Region - ${name}</th>
-                </tr>
-                <tr class="rowlow">
-                    <th nowrap align="center">Updated: ${date}</th>
-                </tr>
-            </tbody>
-        </table>
-        <a name="#top"></a>
-            <table class='live' border='0' cellspacing='5' width='80%' cellpadding='3' style='border-collapse: collapse; word-wrap: break-word; table-layout: fixed;' align='center'>
+            </script>
+        </head>
+        <body>
+            <button class="toggle-button" onClick="toggleURL()" style="display: ${toggle ? 'block' : 'none'}">Toggle ${pax ? 'Class' : 'PAX'}</button>
+            <h1>${name.toUpperCase()} Results</h1>
+            <table class='live' cellpadding='3' cellspacing='1' style='border-collapse: collapse' align='center'>
                 <tbody>
-                    <tr>
-                        ${pax ? '' : Object.keys(jsonData).map(category => `<td style="word-wrap: break-word; white-space: normal;"><a class='bkmark' href="#${category}">${category}</a></td>`).join('')}
+                    <tr class="rowlow">
+                        <th nowrap align="center">Region - ${name}</th>
+                    </tr>
+                    <tr class="rowlow">
+                        <th nowrap align="center">Updated: ${date}</th>
                     </tr>
                 </tbody>
             </table>
-    `;
+            <a name="#top"></a>
+                <table class='live' border='0' cellspacing='5' width='80%' cellpadding='3' style='border-collapse: collapse; word-wrap: break-word; table-layout: fixed;' align='center'>
+                    <tbody>
+                        <tr>
+                            ${pax ? '' : Object.keys(jsonData).map(category => `<td style="word-wrap: break-word; white-space: normal;"><a class='bkmark' href="#${category}">${category}</a></td>`).join('')}
+                        </tr>
+                    </tbody>
+                </table>
+        `;
 
-    // Iterate over each category (P, T, S, etc.)
-    if (pax) {
-        htmlContent += `
-        <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
-        <tbody>
-        <tr class="rowlow">
-        <th nowrap rowspan="1" colspan="9" align="left"><a name="PAX"></a> PAX - Total Entries: ${jsonData.length}</th>
-        </tr>
+        // Iterate over each category (P, T, S, etc.)
+        if (pax) {
+            htmlContent += `
+            <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
+            <tbody>
+            <tr class="rowlow">
+            <th nowrap rowspan="1" colspan="100" align="left"><a name="PAX"></a> PAX - Total Entries: ${jsonData.length}</th>
+            </tr>
 
-        ${generateTableRows(jsonData)}
-        </tbody>
-        </table>`;
-    } else {
-        for (const category in jsonData) {
-            if (jsonData.hasOwnProperty(category)) {
-                htmlContent += `
-                <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
-                <tbody>
-                <tr class="rowlow">
-                <th nowrap rowspan="1" colspan="9" align="left"><a name="${category}"></a> ${category} - Total Entries: ${jsonData[category].length}</th>
-                </tr>
-                    ${generateTableRows(jsonData[category])}
-                </tbody>
-                </table>`;
+            ${generateTableRows(jsonData)}
+            </tbody>
+            </table>`;
+        } else {
+            for (const category in jsonData) {
+                if (jsonData.hasOwnProperty(category)) {
+                    htmlContent += `
+                    <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
+                    <tbody>
+                    <tr class="rowlow">
+                    <th nowrap rowspan="1" colspan="100" align="left"><a name="${category}"></a> ${category} - Total Entries: ${jsonData[category].length}</th>
+                    </tr>
+                        ${generateTableRows(jsonData[category])}
+                    </tbody>
+                    </table>`;
+                }
             }
         }
+
+        htmlContent += `
+        </body>
+        </html>`;
+
+        return htmlContent;
+    } catch (error) {
+        console.error(jsonData, "->", error)
+        return jsonData;
     }
+}
 
-    htmlContent += `
-    </body>
-    </html>`;
-
-    return htmlContent;
+function errorCode(error, widget, type = "string", res = undefined){
+    if(widget){
+        if(type == "error"){
+            err = error.stack.split('\n')[0].split(':');
+            results = new_results(true);
+            results["1"].driver =  err[0];
+            results["1"].number = error.response ? error.response.status : '-1';
+            results["1"].times = err[1];
+            results["1"].color = color_downPos;
+            return results;
+        }
+        else {
+            results = new_results(true);
+            results["1"].driver = error;
+            results["1"].number = 500;
+            results["1"].color = color_downPos;
+            return results;
+        }
+    }
+    else{
+        return error;
+    }
 }
