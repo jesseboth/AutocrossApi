@@ -36,11 +36,6 @@ cron.schedule('0 0 * * 1', async function () {
         }
     }
 });
-for (const key in regions) {
-    if(regions[key].archive){
-        archiveJson(key, regions[key]);
-    }
-}
 
 let event_stats = {};
 reset_stats();
@@ -265,7 +260,7 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
                 }
             }
             else {
-                res.send(uiBuilder(getJsonData(`archive/${event_key}.json`)[cclass], event_info[0], event_info[1], true, false));
+                res.send(uiBuilder(getJsonData(`archive/${event_key}.json`)[cclass], event_info[0], event_info[1], true, false, cclass));
             }
             return;
         }
@@ -342,7 +337,21 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             cclass = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
         }
 
-        if(ui && !region){
+        if(tour && region && region.length < 5){
+            cclass = region;
+            const { _url, _region } = await getRedirect(regions[tourType].url, undefined);
+            region = _region;
+            res.redirect((ui ? '/ui/' : '/') + tourType +"/" + region + "/" + cclass);
+            return;
+        }
+        else if(tour && !region){
+            const { _url, _region } = await getRedirect(regions[tourType].url, undefined);
+            region = _region;
+            res.redirect((ui ? '/ui/' : widget ? '' : '/')+ tourType +"/" + region + "/");
+            return;
+        }
+
+        if(!tour && (ui && !region)){
             res.redirect('/');
             return;
         }
@@ -371,7 +380,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         if(region_dict.software == "axware"){
             data = await axware(region, region_dict, cclass, widget)
             if(ui){
-                res.send(uiBuilder(data, region, new Date().toLocaleString(), ppax, toggle));
+                res.send(uiBuilder(data, region, new Date().toLocaleString(), ppax, toggle, cclass));
             }
             else {
                 res.json(data);
@@ -380,7 +389,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         else if(region_dict.software == "pronto"){
             data = await pronto(region, region_dict, cclass, widget)
             if(ui){
-                res.send(uiBuilder(data, region, new Date().toLocaleString(), ppax, toggle));
+                res.send(uiBuilder(data, region, new Date().toLocaleString(), ppax, toggle, cclass));
             }
             else {
                 res.json(data);
@@ -562,11 +571,20 @@ async function axware(region_name, region, cclass, widget = false) {
 
 async function pronto(region_name, region, cclass, widget = false) {
     let classes = [cclass];
+    let backup = [];
+    let doPax = false;
+
     if(cclass == undefined){
         if(region_name){
             class_offset = region_name.includes("NATS") ? region.data.nats_offset : region.data.classes_offset
         }
         classes = await getProntoClasses(region.url, class_offset);
+    }
+    else {
+        if(region_name){
+            class_offset = region_name.includes("NATS") ? region.data.nats_offset : region.data.classes_offset
+        }
+        backup = await getProntoClasses(region.url, class_offset);
     }
 
     if(cclass == "CLASSES"){
@@ -586,14 +604,18 @@ async function pronto(region_name, region, cclass, widget = false) {
         let currentClass = classes[idx];
 
         if(currentClass == "PAX"){
-            if(checkUrlExists(region.url + "PaxIndexOverall.html")){
+            if(await checkUrlExists(region.url + "PaxIndexOverall.html")){
                 url = region.url + "PaxIndexOverall.html";
             }
-            else if(checkUrlExists(region.url + "PaxIndexDay1.html")){
+            else if(await checkUrlExists(region.url + "PaxIndexDay1.html")){
                 url = region.url + "PaxIndexDay1.html";
             }
             else {
-                return new_results(widget);
+                doPax = true;
+                classes = backup;
+                currentClass = classes[idx];
+                url = region.url + currentClass + ".php";
+                cclass = undefined;
             }
         }
         else {
@@ -623,7 +645,7 @@ async function pronto(region_name, region, cclass, widget = false) {
                     for(test = 0; test < 5; test++){
                         let columns = $(parse[index]).find('td');
                         test_value = $(columns[0]).text().trim();
-                        if(test_value == "T"){
+                        if(test_value == "T" || test_value == "1"){
                             break;
                         }
                         index++;
@@ -747,6 +769,11 @@ async function pronto(region_name, region, cclass, widget = false) {
             for(const key in results){
                 results[key] = Object.values(results[key]);
             }
+
+            if (doPax) {
+                return pax(results, widget);
+            }
+
             return results
         }
     } catch (error) {
@@ -762,7 +789,7 @@ function new_results(widget) {
     }
 
     return {
-        "1": { "driver": not_found, "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "1", "color": "#ffffff" },
+        "1": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "1", "color": "#ffffff" },
         "2": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "2", "color": "#ffffff" },
         "3": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "3", "color": "#ffffff" },
         "4": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "4", "color": "#ffffff" },
@@ -894,7 +921,13 @@ function beautifyTimes(times, bestIdx, widget) {
     if(!widget){
         return times;
     }
+
+    arr = []
     for (i = 0; i < times.length; i++) {
+        if(times.length > 8 && times[i].includes("[b]")){
+            arr.push(times[i])
+        }
+
         if(times[i].startsWith("[b]")){
             continue;
         }
@@ -908,13 +941,19 @@ function beautifyTimes(times, bestIdx, widget) {
         times[i] = split.join("[c=#ffde6868]+")
 
     }
-    retval = times.join('   ').trim();
+
+    if(times.length > 8){
+        retval = arr.join('   ').trim();
+    }
+    else {
+        retval = times.join('   ').trim();
+    }
     if(retval == "") { retval = " " }
     return retval;
 }
 
 function convertToSeconds(time) {
-    if (time == "", time.includes('DNF') || time.includes('OFF') || time.includes('DSQ') || time.includes("RRN")) {
+    if (time == "" || time.includes('DNF') || time.includes('OFF') || time.includes('DSQ') || time.includes("RRN") || time == "NO TIME") {
         return Infinity;
     }
 
@@ -989,11 +1028,13 @@ function pax(results, widget){
         if(i > 0){
             const paxA = parseFloat(flattenedData[i-1].pax);
             const paxB = parseFloat(flattenedData[i].pax);
-            if(paxB == NaN){
+
+            if(isNaN(paxB)){
                 flattenedData[i].offset = "-";
             }
-
-            flattenedData[i].offset = ((paxB - paxA).toFixed(3)).toString();
+            else {
+                flattenedData[i].offset = ((paxB - paxA).toFixed(3)).toString();
+            }
         }
 
         if(widget){
@@ -1019,6 +1060,13 @@ function paxSort(data) {
         }
         if(stringB == "OFF" || stringB == "DNF" || stringB == "DSQ" || stringB == ""){
             stringB = "DNF";
+        }
+
+        if(stringA == "NO TIME"){
+            stringA = "DNS";
+        }
+        if(stringB == "NO TIME"){
+            stringB = "DNS";
         }
 
         if(stringA == "DNS" && stringB == "DNS"){
@@ -1051,8 +1099,11 @@ function paxSort(data) {
 // Function to check if a URL exists and return a boolean
 async function checkUrlExists(url) {
     try {
-        await axios.head(url);
-        return true;
+        const response = await axios.head(url);
+        if (response.status === 200) {
+            return true;
+        }
+        return false;
     } catch (error) {
         return false;
     }
@@ -1094,7 +1145,10 @@ async function getProntoClasses(url, offset) {
     }
 }
 
-function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(), pax = false, toggle = true) {
+function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(), pax = false, toggle = true, cclass = "PAX") {
+    jsonLength = Object.keys(jsonData).length
+    classesOnly = jsonLength >= 12 ? true : false;
+
     // Function to generate table rows for each entry
     function generateTableRows(entries) {
         let rows = '';
@@ -1107,11 +1161,11 @@ function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(),
             numTimes = entry.times.length/2;
             numTimes = numTimes == 0 ? 0 : numTimes > 3 ? numTimes : 3;
             rows += `<tr class="${rowClass}">
-                <td nowrap align="center">${entry.position}</td>
-                <td nowrap align="right">${entry.index}</td>
-                <td nowrap align="right">${entry.number}</td>
-                <td nowrap align="left">${entry.driver}</td>
-                <td nowrap ><font class='bestt'>${entry.pax}</font></td>`
+                <td style="width:5%;" nowrap align="center">${entry.position}</td>
+                <td style="width:7%;" nowrap align="right">${entry.index}</td>
+                <td style="width:5%;" nowrap align="right">${entry.number}</td>
+                <td style="width:40%;" nowrap align="left">${entry.driver}</td>
+                <td style="width:7%;" nowrap ><font class='bestt'>${entry.pax}</font></td>`
                 for(i = 0; i < numTimes; i+=1){
                     rows +=`<td valign="top" nowrap >${entry.times[i] || ''}</td>`
                  }
@@ -1151,39 +1205,73 @@ function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(),
                 .toggle-button {
                     position: absolute;
                     top: 10px;
-                    right: 10px;
+                    right: 1.5%;
                     padding: 10px 20px;
-                    background-color: #6495ed;
+                    background-color: #007BFF;
                     color: white;
                     border: none;
                     cursor: pointer;
                     font-size: 14px;
                     border-radius: 5px;
                 }
+                .button-container {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    justify-content: center;
+                    padding: 10px;
+                }
+
+                .staggered-button {
+                    padding: 5px 15px;
+                    background-color: #007BFF;
+                    color: white;
+                    border: none;
+                    cursor: pointer;
+                    font-size: 12px;
+                    border-radius: 4px;
+                    transition: background-color 0.3s ease;
+                }
+
+                .staggered-button:hover, .toggle-button:hover {
+                    background-color: #0056b3;
+                }
             </style>
             <script>
-    function toggleURL() {
-        const currentURL = window.location.href;
-        const url = new URL(currentURL);
-        let pathParts = url.pathname.split('/').filter(part => part !== ''); // Remove empty parts
+                function toggleURL(add = "pax") {
+                    const currentURL = window.location.href;
+                    const url = new URL(currentURL);
 
-        if (pathParts.includes('pax')) {
-            // Remove 'pax' from the path
-            pathParts.splice(pathParts.indexOf('pax'), 1);
-        } else {
-            // Add 'pax' to the end of the path
-            pathParts.push('pax');
-        }
+                    // Get the current pathname without hash or query parameters
+                    let pathParts = url.pathname.split('/').filter(part => part !== ''); // Remove empty parts
 
-        // Rebuild the URL path and navigate, ensuring no trailing slash unless it's the root
-        url.pathname = '/' + pathParts.join('/');
-        window.location.href = url.toString();
-    }
+                    if (add === "pax") {
+                        if (pathParts.includes('pax')) {
+                            // Remove 'pax' from the path
+                            pathParts.splice(pathParts.indexOf('pax'), 1);
+                        } else {
+                            // Add 'pax' to the end of the path
+                            pathParts.push('pax');
+                        }
+                    } else {
+                        // Add the provided value to the end of the path
+                        pathParts.push(add);
+                    }
+
+                    // Rebuild the URL path
+                    url.pathname = '/' + pathParts.join('/');
+
+                    // Remove the hash from the URL if it exists
+                    url.hash = '';
+
+                    // Update the URL in the browser, avoiding any trailing slash unless it's the root
+                    window.location.href = url.toString();
+                }
             </script>
         </head>
         <body>
             <button class="toggle-button" onClick="toggleURL()" style="display: ${toggle ? 'block' : 'none'}">Toggle ${pax ? 'Class' : 'PAX'}</button>
-            <h1>${name.toUpperCase()} Results</h1>
+            <h2>${name.toUpperCase()} Results</h2>
             <table class='live' cellpadding='3' cellspacing='1' style='border-collapse: collapse' align='center'>
                 <tbody>
                     <tr class="rowlow">
@@ -1197,26 +1285,26 @@ function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(),
             <a name="#top"></a>
                 <table class='live' border='0' cellspacing='5' width='80%' cellpadding='3' style='border-collapse: collapse; word-wrap: break-word; table-layout: fixed;' align='center'>
                     <tbody>
-                        <tr>
-                            ${pax ? '' : Object.keys(jsonData).map(category => `<td style="word-wrap: break-word; white-space: normal;"><a class='bkmark' href="#${category}">${category}</a></td>`).join('')}
-                        </tr>
+                        <div class="button-container" style="display: ${pax ? "none" : "flex"}">
+                            ${pax ? '' : Object.keys(jsonData).map(category => `
+                                <button class="staggered-button" onclick="${classesOnly ? `toggleURL('${category}')` : `location.href='#${category}'`}">${category}</button>
+                            `).join('')}
+                        </div>
                     </tbody>
                 </table>
         `;
-
         // Iterate over each category (P, T, S, etc.)
         if (pax) {
             htmlContent += `
             <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
             <tbody>
             <tr class="rowlow">
-            <th nowrap rowspan="1" colspan="100" align="left"><a name="PAX"></a> PAX - Total Entries: ${jsonData.length}</th>
+            <th nowrap rowspan="1" colspan="100" align="left"><a name="PAX"></a> ${cclass} - Total Entries: ${jsonData.length}</th>
             </tr>
-
             ${generateTableRows(jsonData)}
             </tbody>
             </table>`;
-        } else {
+        } else if(!classesOnly) {
             for (const category in jsonData) {
                 if (jsonData.hasOwnProperty(category)) {
                     htmlContent += `
@@ -1265,4 +1353,30 @@ function errorCode(error, widget, type = "string", res = undefined){
     else{
         return error;
     }
+}
+
+async function getRedirect(url, region = undefined){
+    // Fetch the HTML from the URL
+    let html = "";
+
+    try {
+        const response = await axios.get(url);
+
+        // Extract potential redirect URL from <script> tag
+        const redirectMatch = response.data.match(/location\.href\s*=\s*['"]([^'"]+)['"]/);
+
+        if (redirectMatch && redirectMatch[1]) {
+            const redirectUrl = new URL(redirectMatch[1], url).href; // Resolve relative URL
+
+            redirectArr = redirectUrl.split("index.php")[0].split("/")
+            region = redirectArr[redirectArr.length-2].toUpperCase();
+            return { _url: url, _region: region };
+        } else {
+            return { _url: url, _region: undefined };
+        }
+    } catch (error) {
+        console.error('Error fetching URL:', error);
+    }
+
+    return html;
 }
