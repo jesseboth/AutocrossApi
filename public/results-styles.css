@@ -1,0 +1,103 @@
+body {
+  margin: 0;
+  padding: 0;
+  width: 98vw;
+  max-width: 100%;
+  font-family: Verdena;
+}
+
+.rowhigh {
+  background-color: #e6e6e8;
+}
+
+.rowlow {
+  background-color: #FFFFFF;
+}
+
+h1,
+h2,
+h3 {
+  text-align: center;
+  font-family: Arial;
+  color: #0000FF;
+}
+
+h5 {
+  text-align: center;
+  font-family: Arial;
+  color: #0000FF;
+  /* margin-left: 20%; */
+}
+
+th {
+  color: #FFFFFF;
+  background-color: #152bed;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 8px;
+  text-align: center;
+}
+
+a {
+  color: blue;
+  text-decoration: none;
+}
+
+.bestt {
+  font-weight: bold;
+}
+
+#toggle-button {
+  position: absolute;
+  top: 10px;
+  right: 1.5%;
+  padding: 10px 20px;
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 5px;
+}
+
+#button-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  padding: 10px;
+}
+
+.button-box {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: -1%;
+  justify-content: center;
+  width: 100%;
+}
+
+.staggered-button {
+  padding: 5px 15px;
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  height: 35px;
+  transition: background-color 0.3s ease;
+}
+
+.staggered-button:hover,
+.toggle-button:hover {
+  background-color: #0056b3;
+}
