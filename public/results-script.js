@@ -1,13 +1,17 @@
 
 // TODO maybe get from server?
 tourEvents = ["TOUR", "PRO"]
+tourNames = {
+    "TOUR": "National Tour",
+    "PRO": "Pro Solo"
+}
 const tourClasses = {
     "Street": ["SS", "AS", "BS", "CS", "DS", "ES", "FS", "GS", "HS"],
     "Street Touring": ["STH", "STS", "STX", "STU", "STR", "SST", "SSC", "EVX"],
     "Street Prep": ["SSP", "CSP", "DSP", "ESP", "FSP", "LS"],
     "Index": ["S1", "S3", "S4", "S5"],
     "Spec": ["XP", "CP", "DP", "EP", "FP", "CSM"],
-    "Race Tire": ["R1", "R2", "R3", "SSP", "CAM"],
+    "Race Tire": ["R1", "R2", "R3"],
     "Street Mod": ["SM", "SSM", "SMF", "XA", "XB", "XU", "CAM", "CAMC", "CAMT", "CAMS"],
     "Modified": ["AM", "BM", "CM", "DM", "EM", "FM", "KM", "FSAE"],
     "Ladies": ["L1", "L2", "L3", "L4"]
@@ -27,9 +31,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     document.title = `${regionData.regionName} Results`
     document.getElementById("region-header").innerHTML = `${regionData.regionName} Results`
-    document.getElementById("header").innerHTML = `${regionData.regionName} Region`
+    document.getElementById("header").innerHTML = `${regionData.regionName} ${tour ? "" : "Region"}`
     document.getElementById("updated").innerHTML = `Updated: ${new Date().toLocaleString()}`;
     // document.getElementById("toggle-button").style.display = cclass == undefined || cclass == "PAX" ? "block" : "none";
+    document.getElementById("toggle-button").style.backgroundColor = cclass == "PAX" ? "#ff0000" : "#007BFF";
+
     document.getElementById('results').innerHTML = "";  // Clear the results table
 
     getClasses(region).then(classes => {
@@ -49,12 +55,9 @@ document.addEventListener("DOMContentLoaded", function () {
                 console.error('Error fetching results:', error); // Handle any errors from `getResults`
             });
         }
-        if (!tour && cclass !== undefined) {
-            document.getElementById("button-container").style.display = "none";
-        }
-        else {
-            setClasses(classes, tour);
-        }
+
+        setClasses(cclass, classes, tour);
+
         // this should happen last
         document.body.style.display = "block";
 
@@ -69,16 +72,12 @@ function toggleURL(add = "pax") {
 
     // Get the current pathname without hash or query parameters
     let pathParts = url.pathname.split('/').filter(part => part !== ''); // Remove empty parts
-
-    if (add === "pax") {
-        if (pathParts.includes('pax')) {
-            // Remove 'pax' from the path
-            pathParts.splice(pathParts.indexOf('pax'), 1);
-        } else {
-            pathParts = ["ui", region, add, ""];
-        }
+    archive = pathParts[0] == "archive" ? true : false
+    if (pathParts.includes(add)) {
+        // Remove 'pax' from the path
+        pathParts.splice(pathParts.indexOf('pax'), 1);
     } else {
-        pathParts = ["ui", region, add, ""];
+        pathParts = [archive ? "archive/ui" : "ui", region, add, ""];
     }
 
     // Rebuild the URL path
@@ -87,7 +86,7 @@ function toggleURL(add = "pax") {
     // Remove the hash from the URL if it exists
     url.hash = '';
 
-    window.location.href = url.toString();
+    window.location.replace(url.toString());
 }
 
 function getPath() {
@@ -98,8 +97,10 @@ function getPath() {
 }
 
 function getClass(region) {
+    regionTest = region.split("/")
+    regionTest = regionTest[regionTest.length - 1]
     pathParts = getPath()
-    if (pathParts.join("/").toUpperCase().endsWith(region)) {
+    if (pathParts.join("/").toUpperCase().endsWith(regionTest)) {
         return undefined;
     }
     else {
@@ -110,16 +111,41 @@ function getClass(region) {
 function getRegion() {
     const pathParts = getPath();  // Get the path parts from getPath()
 
-    if (!tourEvents.includes(pathParts[1].toUpperCase())) {
+    isArchive = pathParts[0] == "archive" ? true : false;
+    if(isArchive) {
+        split = pathParts[2].split("_")
+        isTour = tourEvents.includes(split[0].toUpperCase()) ? true : false;
+    }
+    else {
+        isTour = tourEvents.includes(pathParts[1].toUpperCase()) ? true : false;
+    }
+
+    if (!isTour && !isArchive) {
         return { 
             region: pathParts[1].toUpperCase(), 
-            regionName: pathParts[1].toUpperCase(),
-            isTour: false
+            regionName: isTour ? tourNames[pathParts[1].toUpperCase()] : pathParts[1].toUpperCase(),
+            isTour: isTour
         };
-    } else {
+    } 
+    else if(isArchive) {
+        return { 
+            region: "archive/" + pathParts[2].toUpperCase(), 
+            regionName: isTour ? tourNames[pathParts[2].toUpperCase()] : pathParts[2].toUpperCase(),
+            isTour: isTour
+        };
+    }
+    else if (isTour){
+        regionTry = pathParts[2]
+        if(regionTry && regionTry.length < 5) {
+            return {
+                region: pathParts[1].toUpperCase(), 
+                regionName: isTour ? tourNames[pathParts[1].toUpperCase()] : pathParts[1].toUpperCase(),
+                isTour: true
+            };
+        }
         return {
-            region: pathParts[1].toUpperCase() + "/" + pathParts[2].toUpperCase(),
-            regionName: pathParts[2].toUpperCase(),
+            region: pathParts[1].toUpperCase(), 
+            regionName: isTour ? tourNames[pathParts[1].toUpperCase()] : pathParts[1].toUpperCase(),
             isTour: true
         };
     }
@@ -143,10 +169,10 @@ function classesOnly(classes) {
     return classes.length >= 10 ? true : false
 }
 
-function setClasses(classes, tour = false) {
+function setClasses(cclass, classes, tour = false) {
     // Get the button container element
     const buttonContainer = document.getElementById('button-container');
-    slash = classesOnly(classes) ? "" : "#"
+    slash = classesOnly(classes) ? "" : ""
 
     if(tour) {
         Object.keys(tourClasses).forEach(category => {
@@ -168,6 +194,10 @@ function setClasses(classes, tour = false) {
                     button.innerHTML = label;
                     // Set an onclick handler that navigates to a specific location
                     button.onclick = () => toggleURL(label);
+
+                    if(label == cclass) {
+                        button.style.backgroundColor = "#ff0000";
+                    }
 
                     
                     // Append the button to the container
@@ -192,8 +222,12 @@ function setClasses(classes, tour = false) {
             button.className = 'staggered-button';
             button.innerHTML = label;
             // Set an onclick handler that navigates to a specific location
-            button.onclick = () => location.href = `${slash}${label}`;
+            button.onclick = () => toggleURL(label);
             
+            if(label == cclass) {
+                button.style.backgroundColor = "#ff0000";
+            }
+
             // Append the button to the container
             buttonContainer.appendChild(button);
         });
@@ -203,7 +237,14 @@ function setClasses(classes, tour = false) {
 
 
 async function getResults(cclass = "") {
-    path = getPath().splice(1).join('/');
+    path = getPath();
+    newPath = []
+    for (let i = 0; i < path.length; i++) {
+        if(path[i] != "ui"){
+            newPath.push(path[i]);
+        }
+    }
+    path = newPath.join('/');
     return await getData('/' + path + '/' + cclass);
 }
 

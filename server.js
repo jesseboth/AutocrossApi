@@ -5,6 +5,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
+const { get } = require('http');
 
 const app = express();
 const PORT = 8000;
@@ -50,6 +51,10 @@ app.use(express.static('public')); // Serve static files from the public directo
 
 // Set up a route to serve the HTML file
 app.get('/ui/:b?/:c?/:d?', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
+});
+
+app.get('/archive/ui/:b?/:c?', async (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
 });
 
@@ -336,7 +341,15 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             region = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
             cclass = req.params.d != undefined ? req.params.d.toUpperCase() : undefined;
         }
-        else if (widget || tour || ui) {
+        else if(tour){
+            region = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
+            cclass = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
+            if(region == "CLASSES"){
+                cclass = region;
+                region = undefined;
+            }
+        }
+        else if (widget || ui) {
             region = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
             cclass = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
         }
@@ -345,25 +358,21 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             cclass = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
         }
 
-        if (tour && region && region.length < 5) {
+        if (tour &&  !region && cclass == "CLASSES") {
+            const { _url, _region } = await getRedirect(regions[tourType].url, undefined);
+            region = _region;
+        }
+        else if(tour && region.length < 5){
             cclass = region;
             const { _url, _region } = await getRedirect(regions[tourType].url, undefined);
             region = _region;
-            res.redirect((ui ? '/ui/' : '/') + tourType + "/" + region + "/" + cclass);
-            return;
         }
-        else if (tour && !region) {
-            const { _url, _region } = await getRedirect(regions[tourType].url, undefined);
-            region = _region;
-            res.redirect((ui ? '/ui/' : widget ? '' : '/') + tourType + "/" + region + "/");
-            return;
-        }
-
+        
         if (!tour && (ui && !region)) {
             res.redirect('/');
             return;
         }
-
+        
         if (!tour && !regions.hasOwnProperty(region)) {
             res.status(500).send(errorCode("Region not found", widget));
             return;
@@ -387,21 +396,11 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         toggle = cclass != undefined && cclass != "PAX" ? false : true;
         if (region_dict.software == "axware") {
             data = await axware(region, region_dict, cclass, widget)
-            if (ui) {
-                res.send(uiBuilder(data, region, new Date().toLocaleString(), ppax, toggle, cclass));
-            }
-            else {
-                res.json(data);
-            }
+            res.json(data);
         }
         else if (region_dict.software == "pronto") {
             data = await pronto(region, region_dict, cclass, widget)
-            if (ui) {
-                res.send(uiBuilder(data, region, new Date().toLocaleString(), ppax, toggle, cclass));
-            }
-            else {
-                res.json(data);
-            }
+            res.json(data);
         }
         else {
             res.status(500).send(errorCode("Timing Software not defined", widget));
@@ -1150,192 +1149,6 @@ async function getProntoClasses(url, offset) {
     } catch (error) {
         console.error('Error fetching or parsing HTML:', error);
         return [];
-    }
-}
-
-function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(), pax = false, toggle = true, cclass = "PAX") {
-    jsonLength = Object.keys(jsonData).length
-    classesOnly = jsonLength >= 12 ? true : false;
-
-    // Function to generate table rows for each entry
-    function generateTableRows(entries) {
-        let rows = '';
-        entries.forEach((entry, index) => {
-            const rowClass = index % 2 === 0 ? 'rowlow' : 'rowhigh';
-            if (entry.times.length > 0) {
-                bestTimeIndex = findBestTimeIndex(entry.times);
-                entry.times[bestTimeIndex] = `<b style="border: 1px solid black; padding: 2px; color: black;">${entry.times[bestTimeIndex]}</b>`;
-            }
-            numTimes = entry.times.length / 2;
-            numTimes = numTimes == 0 ? 0 : numTimes > 3 ? numTimes : 3;
-            rows += `<tr class="${rowClass}">
-                <td style="width:5%;" nowrap align="center">${entry.position}</td>
-                <td style="width:7%;" nowrap align="right">${entry.index}</td>
-                <td style="width:5%;" nowrap align="right">${entry.number}</td>
-                <td style="width:40%;" nowrap align="left">${entry.driver}</td>
-                <td style="width:7%;" nowrap ><font class='bestt'>${entry.pax}</font></td>`
-            for (i = 0; i < numTimes; i += 1) {
-                rows += `<td valign="top" nowrap >${entry.times[i] || ''}</td>`
-            }
-            rows += `
-            </tr>
-            <tr class="${rowClass}">
-                <td nowrap align="center"></td>
-                <td nowrap align="right"></td>
-                <td nowrap align="right"></td>
-                <td nowrap align="left">${entry.car}</td>
-                <td nowrap >${entry.offset}</td>`
-            for (i = numTimes; i < numTimes * 2; i += 1) {
-                rows += `<td valign="top" nowrap >${entry.times[i] || ''}</td>`
-            }
-
-            rows += `</tr>`;
-        });
-        return rows;
-    }
-    try {
-        // Generate the HTML content
-        let htmlContent = `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <title>Updated: ${date}</title>
-            <style>
-                body { margin: 0; padding: 0; width: 98vw; max-width: 100%; font-family: Verdena; }
-                .rowhigh { background-color: #e6e6e8; }
-                .rowlow { background-color: #FFFFFF; }
-                h1, h2, h3 { text-align: center; font-family: Arial; color: #0000FF; }
-                th { color: #FFFFFF; background-color: #152bed; }
-                table { width: 100%; border-collapse: collapse; }
-                th, td { padding: 8px; text-align: center; }
-                a { color: blue; text-decoration: none; }
-                .bestt { font-weight: bold; }
-                .toggle-button {
-                    position: absolute;
-                    top: 10px;
-                    right: 1.5%;
-                    padding: 10px 20px;
-                    background-color: #007BFF;
-                    color: white;
-                    border: none;
-                    cursor: pointer;
-                    font-size: 14px;
-                    border-radius: 5px;
-                }
-                .button-container {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 10px;
-                    justify-content: center;
-                    padding: 10px;
-                }
-
-                .staggered-button {
-                    padding: 5px 15px;
-                    background-color: #007BFF;
-                    color: white;
-                    border: none;
-                    cursor: pointer;
-                    font-size: 12px;
-                    border-radius: 4px;
-                    transition: background-color 0.3s ease;
-                }
-
-                .staggered-button:hover, .toggle-button:hover {
-                    background-color: #0056b3;
-                }
-            </style>
-            <script>
-                function toggleURL(add = "pax") {
-                    const currentURL = window.location.href;
-                    const url = new URL(currentURL);
-
-                    // Get the current pathname without hash or query parameters
-                    let pathParts = url.pathname.split('/').filter(part => part !== ''); // Remove empty parts
-
-                    if (add === "pax") {
-                        if (pathParts.includes('pax')) {
-                            // Remove 'pax' from the path
-                            pathParts.splice(pathParts.indexOf('pax'), 1);
-                        } else {
-                            // Add 'pax' to the end of the path
-                            pathParts.push('pax');
-                        }
-                    } else {
-                        // Add the provided value to the end of the path
-                        pathParts.push(add);
-                    }
-
-                    // Rebuild the URL path
-                    url.pathname = '/' + pathParts.join('/');
-
-                    // Remove the hash from the URL if it exists
-                    url.hash = '';
-
-                    // Update the URL in the browser, avoiding any trailing slash unless it's the root
-                    window.location.href = url.toString();
-                }
-            </script>
-        </head>
-        <body>
-            <button class="toggle-button" onClick="toggleURL()" style="display: ${toggle ? 'block' : 'none'}">Toggle ${pax ? 'Class' : 'PAX'}</button>
-            <h2>${name.toUpperCase()} Results</h2>
-            <table class='live' cellpadding='3' cellspacing='1' style='border-collapse: collapse' align='center'>
-                <tbody>
-                    <tr class="rowlow">
-                        <th nowrap align="center">Region - ${name}</th>
-                    </tr>
-                    <tr class="rowlow">
-                        <th nowrap align="center">Updated: ${date}</th>
-                    </tr>
-                </tbody>
-            </table>
-            <a name="#top"></a>
-                <table class='live' border='0' cellspacing='5' width='80%' cellpadding='3' style='border-collapse: collapse; word-wrap: break-word; table-layout: fixed;' align='center'>
-                    <tbody>
-                        <div class="button-container" style="display: ${pax ? "none" : "flex"}">
-                            ${pax ? '' : Object.keys(jsonData).map(category => `
-                                <button class="staggered-button" onclick="${classesOnly ? `toggleURL('${category}')` : `location.href='#${category}'`}">${category}</button>
-                            `).join('')}
-                        </div>
-                    </tbody>
-                </table>
-        `;
-        // Iterate over each category (P, T, S, etc.)
-        if (pax) {
-            htmlContent += `
-            <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
-            <tbody>
-            <tr class="rowlow">
-            <th nowrap rowspan="1" colspan="100" align="left"><a name="PAX"></a> ${cclass} - Total Entries: ${jsonData.length}</th>
-            </tr>
-            ${generateTableRows(jsonData)}
-            </tbody>
-            </table>`;
-        } else if (!classesOnly) {
-            for (const category in jsonData) {
-                if (jsonData.hasOwnProperty(category)) {
-                    htmlContent += `
-                    <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
-                    <tbody>
-                    <tr class="rowlow">
-                    <th nowrap rowspan="1" colspan="100" align="left"><a name="${category}"></a> ${category} - Total Entries: ${jsonData[category].length}</th>
-                    </tr>
-                        ${generateTableRows(jsonData[category])}
-                    </tbody>
-                    </table>`;
-                }
-            }
-        }
-
-        htmlContent += `
-        </body>
-        </html>`;
-
-        return htmlContent;
-    } catch (error) {
-        console.error(jsonData, "->", error)
-        return jsonData;
     }
 }
 
