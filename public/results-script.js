@@ -75,17 +75,14 @@ function toggleURL(add = "pax") {
     archive = pathParts[0] == "archive" ? true : false
     if (pathParts.includes(add)) {
         // Remove 'pax' from the path
-        pathParts.splice(pathParts.indexOf('pax'), 1);
+        pathParts.splice(pathParts.indexOf(add), 1);
     } else {
         pathParts = [archive ? "" : "ui", region, add, ""];
-    }
-
-    if (archive) {
-        console.log(pathParts)
-        archiveArr = pathParts[1].split("/")
-        uiArr = [archiveArr[0], "ui", archiveArr[1]]
-        pathParts[1] = uiArr.join('/')
-        console.log(pathParts)
+        if (archive) {
+            archiveArr = pathParts[1].split("/")
+            uiArr = [archiveArr[0], "ui", archiveArr[1]]
+            pathParts[1] = uiArr.join('/')
+        }
     }
 
     // Rebuild the URL path

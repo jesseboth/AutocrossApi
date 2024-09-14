@@ -61,46 +61,6 @@ app.get('/archive/ui/:b?/:c?', async (req, res) => {
 
 app.use('/archive', express.static("archive")); // Serve static files from the archive directory
 
-style = `  <style>
-                body {
-                    margin: 0;
-                    padding: 0;
-                    font-family: Arial, sans-serif;
-                    background-color: #e6e6e8;
-                }
-                .container {
-                    padding: 20px;
-                }
-                h1 {
-                    margin: 0 0 20px 0;
-                    font-size: 24px;
-                    color: #333;
-                }
-                ul {
-                    list-style: none;
-                    padding: 0;
-                }
-                li {
-                    margin-bottom: 10px;
-                    display: flex;
-                    justify-content: center; /* Center the button */
-                }
-                a {
-                    display: block;
-                    width: 25%; /* Each button takes 25% of the total width */
-                    padding: 10px 15px;
-                    background-color: #007BFF;
-                    color: white;
-                    text-decoration: none;
-                    border-radius: 5px;
-                    text-align: center;
-                    margin-left: 10px;
-                }
-                a:hover {
-                    background-color: #0056b3;
-                }
-            </style>`;
-
 // Route to list all archived files
 app.get('/archive', async (req, res) => {
     let html = `
@@ -109,7 +69,7 @@ app.get('/archive', async (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            ${style}
+            <link rel="stylesheet" href="/menu-styles.css">
         </head>
         <body>
             <div class="container">
@@ -158,7 +118,7 @@ app.get('/', async (req, res) => {
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            ${style}
+            <link rel="stylesheet" href="/menu-styles.css">
         </head>
         <body>
             <div class="container">
