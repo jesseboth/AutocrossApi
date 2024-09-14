@@ -6,6 +6,7 @@ const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
 const { get } = require('http');
+const { dir } = require('console');
 
 const app = express();
 const PORT = 8000;
@@ -70,6 +71,7 @@ app.get('/archive', async (req, res) => {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="/menu-styles.css">
+            <script src="/menu-script.js"></script>
         </head>
         <body>
             <div class="container">
@@ -79,20 +81,40 @@ app.get('/archive', async (req, res) => {
 
     try {
 
-        let files = await fsp.readdir("archive");
-        for (let file of files) {
-            if (file.includes(".json")) {
-                const fileName = file.split(".")[0];
-                html += `
-                    <li>
-                        <a href="/archive/ui/${fileName}">${fileName}</a>
-                    </li>
-                `;
+        let dirs = await fsp.readdir("archive");
+        for (let dir of dirs) {
+            // Create a container for each directory
+            const dirId = `dir-${dir.replace(/\s+/g, '-')}`; // Unique ID for each directory
+            
+            // Add a clickable heading for each directory
+            html += `
+            <li>
+                <a style="width: 65%" onclick="toggleVisibility('${dirId}')">${dir}</a>
+            </li>
+        `; 
+            
+            // Add a hidden unordered list to group the files under this directory
+            html += `<ul id="${dirId}" class="file-list" style="display: none;">`;
+            
+            let files = await fsp.readdir(`archive/${dir}`);
+            
+            for (let file of files) {
+                if (file.includes(".json")) {
+                    const fileName = file.split(".")[0];
+                    html += `
+                        <li>
+                            <a href="/archive/ui/${fileName}">${fileName}</a>
+                        </li>
+                    `;
+                }
             }
+            
+            // Close the unordered list
+            html += `</ul>`;
         }
         html += `
         <li>
-            <a style="background-color: #ff0000" href="/">Main Page</a>
+            <a style="background-color: #ff0000; width: 65%;" href="/">Main Page</a>
         </li>
     `;
     } catch (err) {
@@ -201,20 +223,24 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
             }
         }
 
+        let dir = "archive/" + event_key.split("_")[0];
         if (!ui && getEvents) {
             arr = []
-            let files = await fsp.readdir("archive");
-            for (let file of files) {
-                file = file.split(".");
-                if (file[1] == "json") {
-                    arr.push(file[0]);
+            let dirs = await fsp.readdir("archive");
+            for(let dir of dirs){
+                let files = await fsp.readdir(`archive/${dir}`);
+                for (let file of files) {
+                    file = file.split(".");
+                    if (file[1] == "json") {
+                        arr.push(file[0]);
+                    }
                 }
             }
             res.json(arr);
             return;
         }
         else if (!ui && getClasses) {
-            res.json(Object.keys(getJsonData(`archive/${event_key}.json`)));
+            res.json(Object.keys(getJsonData(`${dir}/${event_key}.json`)));
             return;
         }
 
@@ -226,26 +252,26 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
             event_info = event_key.split("_");
             if (cclass == undefined) {
                 if (ppax) {
-                    res.send(uiBuilder(pax(getJsonData(`archive/${event_key}.json`)), event_info[0], event_info[1], ppax));
+                    res.send(uiBuilder(pax(getJsonData(`${dir}/${event_key}.json`)), event_info[0], event_info[1], ppax));
                 }
                 else {
-                    res.send(uiBuilder(getJsonData(`archive/${event_key}.json`), event_info[0], event_info[1], ppax));
+                    res.send(uiBuilder(getJsonData(`${dir}/${event_key}.json`), event_info[0], event_info[1], ppax));
                 }
             }
             else {
-                res.send(uiBuilder(getJsonData(`archive/${event_key}.json`)[cclass], event_info[0], event_info[1], true, false, cclass));
+                res.send(uiBuilder(getJsonData(`${dir}/${event_key}.json`)[cclass], event_info[0], event_info[1], true, false, cclass));
             }
             return;
         }
         else {
             if (ppax) {
-                res.json(pax(getJsonData(`archive/${event_key}.json`)));
+                res.json(pax(getJsonData(`${dir}/${event_key}.json`)));
             }
             else if (cclass == undefined) {
-                res.json((getJsonData(`archive/${event_key}.json`)));
+                res.json((getJsonData(`${dir}/${event_key}.json`)));
             }
             else {
-                res.json((getJsonData(`archive/${event_key}.json`))[cclass]);
+                res.json((getJsonData(`${dir}/${event_key}.json`))[cclass]);
             }
         }
 
@@ -793,12 +819,16 @@ function getYesterdate() {
 //     }
 // }
 
-// archiveJson("TOUR", regions["TOUR"]);
 async function archiveJson(name, region) {
     try {
         const response = await axios.get(region.url);
         const htmlContent = response.data;
-        const filepath = "archive/"
+        const filepath = `archive/${name}/`;
+        fs.mkdir(filepath, { recursive: true }, (err) => {
+            if (err) {
+                console.error('Error creating directories:', err);
+            } 
+        });
 
         date = "fixme-" + getYesterdate();
         const regex = /Live Results - Generated:\s*\w+ (\d{2}-\d{2}-\d{4}) \d{2}:\d{2}:\d{2}/;

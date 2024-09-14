@@ -23,7 +23,7 @@ li {
 }
 a {
   display: block;
-  width: 25%; /* Each button takes 25% of the total width */
+  width: 50%;
   padding: 10px 15px;
   background-color: #007BFF;
   color: white;
