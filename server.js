@@ -51,11 +51,11 @@ cron.schedule('30 2 * * 0', () => {
 app.use(express.static('public')); // Serve static files from the public directory
 
 // Set up a route to serve the HTML file
-app.get('/ui/:b?/:c?/:d?', (req, res) => {
+app.get('/ui/:b/:c?/:d?', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
 });
 
-app.get('/archive/ui/:b?/:c?', async (req, res) => {
+app.get('/archive/ui/:b/:c?', async (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
 });
 
@@ -63,7 +63,7 @@ app.get('/archive/ui/:b?/:c?', async (req, res) => {
 app.use('/archive', express.static("archive")); // Serve static files from the archive directory
 
 // Route to list all archived files
-app.get('/archive', async (req, res) => {
+app.get(['/archive', '/archive/ui' ], async (req, res) => {
     let html = `
         <!DOCTYPE html>
         <html lang="en">
@@ -133,7 +133,7 @@ app.get('/archive', async (req, res) => {
 });
 
 
-app.get('/', async (req, res) => {
+app.get(['/', '/ui'], async (req, res) => {
     let html = `
         <!DOCTYPE html>
         <html lang="en">
@@ -148,7 +148,7 @@ app.get('/', async (req, res) => {
                 <ul>
                     ${Object.keys(regions).map(region => `
                         <li>
-                            <a href="ui/${region}">${region}</a>
+                            <a href="/ui/${region}">${region}</a>
                             <a href="${regions[region].url}">${regions[region].software}</a>
                         </li>
                     `).join('')}

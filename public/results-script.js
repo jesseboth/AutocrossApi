@@ -41,6 +41,7 @@ document.addEventListener("DOMContentLoaded", function () {
     getClasses(region).then(classes => {
         if (!cclass && !classesOnly(classes)) {
             for (let i = 0; i < classes.length; i++) {
+                generateClassTable(classes[i]);
                 getResults(classes[i]).then(res => {
                     generateResultsTable(res, classes[i]);
                 }).catch(error => {
@@ -49,6 +50,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         }
         else if (cclass !== undefined) {
+            generateClassTable(cclass);
             getResults(cclass).then(res => {
                 generateResultsTable(res, cclass);
             }).catch(error => {
@@ -294,33 +296,43 @@ function generateTableRows(entries) {
     return rows;  // Return the constructed rows
 }
 
-function generateResultsTable(jsonData, cclass = undefined) {
+function generateClassTable(cclass = undefined) {
+    htmlContent = '';
+    if(cclass !== undefined) {
+        htmlContent += `
+      <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
+      <tbody id=${cclass}>
+      </tbody>
+      </table>`;
+    }
+    document.getElementById('results').innerHTML += htmlContent;
+}
+
+async function generateResultsTable(jsonData, cclass = undefined) {
     let htmlContent = '';  // Initialize the HTML content string
     if (cclass !== undefined) {
         htmlContent += `
-      <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
-      <tbody>
       <tr class="rowlow">
       <th nowrap rowspan="1" colspan="100" align="left"><a name="${cclass}"></a> ${cclass} - Total Entries: ${jsonData.length}</th>
       </tr>
       ${generateTableRows(jsonData)}
-      </tbody>
-      </table>`;
-    } else {
-        for (const category in jsonData) {
-            if (jsonData.hasOwnProperty(category)) {
-                htmlContent += `
-          <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
-          <tbody>
-          <tr class="rowlow">
-          <th nowrap rowspan="1" colspan="100" align="left"><a name="${category}"></a> ${category} - Total Entries: ${jsonData[category].length}</th>
-          </tr>
-          ${generateTableRows(jsonData[category])}
-          </tbody>
-          </table>`;
-            }
-        }
-    }
-    // Inject the generated HTML into the DOM
-    document.getElementById('results').innerHTML += htmlContent;
+        `;
+    } 
+    // else {
+    //     for (const category in jsonData) {
+    //         if (jsonData.hasOwnProperty(category)) {
+    //             htmlContent += `
+    //       <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
+    //       <tbody>
+    //       <tr class="rowlow">
+    //       <th nowrap rowspan="1" colspan="100" align="left"><a name="${category}"></a> ${category} - Total Entries: ${jsonData[category].length}</th>
+    //       </tr>
+    //       ${generateTableRows(jsonData[category])}
+    //       </tbody>
+    //       </table>`;
+    //         }
+    //     }
+    // }
+
+    document.getElementById(cclass).innerHTML += htmlContent;
 }
