@@ -143,6 +143,8 @@ function getRegion() {
     }
     else if (isTour){
         regionTry = pathParts[2]
+
+        // there is a class at regionTry
         if(regionTry && regionTry.length < 5) {
             return {
                 region: pathParts[1].toUpperCase(), 
@@ -151,8 +153,8 @@ function getRegion() {
             };
         }
         return {
-            region: pathParts[1].toUpperCase(), 
-            regionName: isTour ? tourNames[pathParts[1].toUpperCase()] : pathParts[1].toUpperCase(),
+            region: pathParts[1].toUpperCase() + (regionTry ? "/" + regionTry : ""), 
+            regionName: (regionTry ? ( pathParts[2].toUpperCase()) + " ": "") + tourNames[pathParts[1].toUpperCase()],
             isTour: true
         };
     }
@@ -173,7 +175,7 @@ async function getClasses(region) {
 }
 
 function classesOnly(classes) {
-    return classes.length >= 10 ? true : false
+    return classes.length >= 15 ? true : false
 }
 
 function setClasses(cclass, classes, tour = false) {
@@ -247,7 +249,7 @@ async function getResults(cclass = "") {
     path = getPath();
     newPath = []
     for (let i = 0; i < path.length; i++) {
-        if(path[i] != "ui"){
+        if(path[i] != "ui" && path[i] != cclass){
             newPath.push(path[i]);
         }
     }

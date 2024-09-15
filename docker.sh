@@ -111,7 +111,7 @@ elif [ $BUILD = TRUE ]; then
 fi
 
 if [ $LOG == TRUE ]; then
-    print "Showing logs"
+    print "Showing logs\n"
     docker logs -f "$CONTAINERNAME"
 fi
 

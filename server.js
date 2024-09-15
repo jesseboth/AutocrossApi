@@ -348,7 +348,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             const { _url, _region } = await getRedirect(regions[tourType].url, undefined);
             region = _region;
         }
-        else if(tour && region.length < 5){
+        else if(tour && (!region || region.length < 5)){
             cclass = region;
             const { _url, _region } = await getRedirect(regions[tourType].url, undefined);
             region = _region;
@@ -685,7 +685,7 @@ async function pronto(region_name, region, cclass, widget = false) {
                 if (valid && eligibleName(temp.driver, eligible)) {
                     store = temp.class;
                     temp.class = currentClass;
-                    if (temp.index == undefined || temp.index.trim() == "") {
+                    if (temp.index == undefined || temp.index.trim() == "-") {
                         temp.index = currentClass.toUpperCase();
                     } else {
                         temp.index = temp.index.toUpperCase();
