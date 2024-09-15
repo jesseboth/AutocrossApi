@@ -62,7 +62,7 @@
     "tour": true,
     "format": [
         [null, "position", "number", "driver", "car", null],
-        [null, null, null, "t", "t",  "t", "t", "t", "t", null, "pax"],
+        [null, "index", null, "t", "t",  "t", "t", "t", "t", null, "pax"],
         [],
         [null, null, null, "t", "t",  "t", "t", "t", "t", null, "offset"],
         []

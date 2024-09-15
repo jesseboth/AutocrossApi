@@ -4,6 +4,9 @@ const cheerio = require('cheerio');
 const cron = require('node-cron');
 const fs = require('fs');
 const fsp = require('fs').promises;
+const path = require('path');
+const { get } = require('http');
+const { dir } = require('console');
 
 const app = express();
 const PORT = 8000;
@@ -30,7 +33,7 @@ const user_driver = settings.user;
 // Schedule the task to run every Monday at 00:00
 cron.schedule('0 0 * * 1', async function () {
     for (const key in regions) {
-        if(regions[key].archive){
+        if (regions[key].archive) {
             // fetchAndSaveWebpage(regions[key].url, key);
             archiveJson(key, regions[key]);
         }
@@ -46,57 +49,29 @@ cron.schedule('30 2 * * 0', () => {
 });
 
 app.use(express.static('public')); // Serve static files from the public directory
+
+// Set up a route to serve the HTML file
+app.get('/ui/:b/:c?/:d?', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
+});
+
+app.get('/archive/ui/:b/:c?', async (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
+});
+
+
 app.use('/archive', express.static("archive")); // Serve static files from the archive directory
 
-style = `  <style>
-                body {
-                    margin: 0;
-                    padding: 0;
-                    font-family: Arial, sans-serif;
-                    background-color: #e6e6e8;
-                }
-                .container {
-                    padding: 20px;
-                }
-                h1 {
-                    margin: 0 0 20px 0;
-                    font-size: 24px;
-                    color: #333;
-                }
-                ul {
-                    list-style: none;
-                    padding: 0;
-                }
-                li {
-                    margin-bottom: 10px;
-                    display: flex;
-                    justify-content: center; /* Center the button */
-                }
-                a {
-                    display: block;
-                    width: 25%; /* Each button takes 25% of the total width */
-                    padding: 10px 15px;
-                    background-color: #007BFF;
-                    color: white;
-                    text-decoration: none;
-                    border-radius: 5px;
-                    text-align: center;
-                    margin-left: 10px;
-                }
-                a:hover {
-                    background-color: #0056b3;
-                }
-            </style>`;
-
 // Route to list all archived files
-app.get('/archive', async (req, res) => {
+app.get(['/archive', '/archive/ui' ], async (req, res) => {
     let html = `
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            ${style}
+            <link rel="stylesheet" href="/menu-styles.css">
+            <script src="/menu-script.js"></script>
         </head>
         <body>
             <div class="container">
@@ -106,20 +81,40 @@ app.get('/archive', async (req, res) => {
 
     try {
 
-        let files = await fsp.readdir("archive");
-        for (let file of files) {
-            if(file.includes(".json")){
-                const fileName = file.split(".")[0];
-                html += `
-                    <li>
-                        <a href="/archive/ui/${fileName}">${fileName}</a>
-                    </li>
-                `;
+        let dirs = await fsp.readdir("archive");
+        for (let dir of dirs) {
+            // Create a container for each directory
+            const dirId = `dir-${dir.replace(/\s+/g, '-')}`; // Unique ID for each directory
+            
+            // Add a clickable heading for each directory
+            html += `
+            <li>
+                <a style="width: 65%" onclick="toggleVisibility('${dirId}')">${dir}</a>
+            </li>
+        `; 
+            
+            // Add a hidden unordered list to group the files under this directory
+            html += `<ul id="${dirId}" class="file-list" style="display: none;">`;
+            
+            let files = await fsp.readdir(`archive/${dir}`);
+            
+            for (let file of files) {
+                if (file.includes(".json")) {
+                    const fileName = file.split(".")[0];
+                    html += `
+                        <li>
+                            <a href="/archive/ui/${fileName}">${fileName}</a>
+                        </li>
+                    `;
+                }
             }
+            
+            // Close the unordered list
+            html += `</ul>`;
         }
         html += `
         <li>
-            <a style="background-color: #ff0000" href="/">Main Page</a>
+            <a style="background-color: #ff0000; width: 65%;" href="/">Main Page</a>
         </li>
     `;
     } catch (err) {
@@ -138,14 +133,14 @@ app.get('/archive', async (req, res) => {
 });
 
 
-app.get('/', async (req, res) => {
+app.get(['/', '/ui'], async (req, res) => {
     let html = `
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            ${style}
+            <link rel="stylesheet" href="/menu-styles.css">
         </head>
         <body>
             <div class="container">
@@ -153,7 +148,7 @@ app.get('/', async (req, res) => {
                 <ul>
                     ${Object.keys(regions).map(region => `
                         <li>
-                            <a href="ui/${region}">${region}</a>
+                            <a href="/ui/${region}">${region}</a>
                             <a href="${regions[region].url}">${regions[region].software}</a>
                         </li>
                     `).join('')}
@@ -182,7 +177,7 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
     getClasses = false;
     cclass = undefined;
 
-    try{
+    try {
         switch (req.params.a.toLowerCase()) {
             case "events":
                 getEvents = true;
@@ -198,7 +193,7 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
                 break;
         }
 
-        if(req.params.b && !getEvents){
+        if (req.params.b && !getEvents) {
             switch (req.params.b.toLowerCase()) {
                 case "classes":
                     getClasses = true;
@@ -207,7 +202,7 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
                     ppax = true;
                     break;
                 default:
-                    if(event_key == ""){
+                    if (event_key == "") {
                         event_key = req.params.b.toUpperCase();
                     }
                     else {
@@ -217,7 +212,7 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
             }
         }
 
-        if(req.params.c && !getEvents){
+        if (req.params.c && !getEvents) {
             switch (req.params.c.toLowerCase()) {
                 case "pax":
                     ppax = true;
@@ -228,51 +223,55 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
             }
         }
 
-        if(!ui && getEvents){
+        let dir = "archive/" + event_key.split("_")[0];
+        if (!ui && getEvents) {
             arr = []
-            let files = await fsp.readdir("archive");
-            for (let file of files) {
-                file = file.split(".");
-                if(file[1] == "json"){
-                    arr.push(file[0]);
+            let dirs = await fsp.readdir("archive");
+            for(let dir of dirs){
+                let files = await fsp.readdir(`archive/${dir}`);
+                for (let file of files) {
+                    file = file.split(".");
+                    if (file[1] == "json") {
+                        arr.push(file[0]);
+                    }
                 }
             }
             res.json(arr);
             return;
         }
-        else if(!ui && getClasses){
-            res.json(Object.keys(getJsonData(`archive/${event_key}.json`)));
+        else if (!ui && getClasses) {
+            res.json(Object.keys(getJsonData(`${dir}/${event_key}.json`)));
             return;
         }
 
-        if(ui){
-            if(!event_key){
+        if (ui) {
+            if (!event_key) {
                 res.redirect('/archive');
                 return;
             }
             event_info = event_key.split("_");
-            if(cclass == undefined){
-                if(ppax){
-                    res.send(uiBuilder(pax(getJsonData(`archive/${event_key}.json`)), event_info[0], event_info[1], ppax));
+            if (cclass == undefined) {
+                if (ppax) {
+                    res.send(uiBuilder(pax(getJsonData(`${dir}/${event_key}.json`)), event_info[0], event_info[1], ppax));
                 }
                 else {
-                    res.send(uiBuilder(getJsonData(`archive/${event_key}.json`), event_info[0], event_info[1], ppax));
+                    res.send(uiBuilder(getJsonData(`${dir}/${event_key}.json`), event_info[0], event_info[1], ppax));
                 }
             }
             else {
-                res.send(uiBuilder(getJsonData(`archive/${event_key}.json`)[cclass], event_info[0], event_info[1], true, false, cclass));
+                res.send(uiBuilder(getJsonData(`${dir}/${event_key}.json`)[cclass], event_info[0], event_info[1], true, false, cclass));
             }
             return;
         }
         else {
-            if(ppax){
-                res.json(pax(getJsonData(`archive/${event_key}.json`)));
+            if (ppax) {
+                res.json(pax(getJsonData(`${dir}/${event_key}.json`)));
             }
-            else if(cclass == undefined){
-                res.json((getJsonData(`archive/${event_key}.json`)));
+            else if (cclass == undefined) {
+                res.json((getJsonData(`${dir}/${event_key}.json`)));
             }
             else {
-                res.json((getJsonData(`archive/${event_key}.json`))[cclass]);
+                res.json((getJsonData(`${dir}/${event_key}.json`))[cclass]);
             }
         }
 
@@ -291,7 +290,7 @@ color_newTime = "#1fb9d1"
 color_none = "#ffffff"
 updates = 0;
 app.get('/:a/:b?/:c?/:d?', async (req, res) => {
-// app.get('/:widget?/:region/:class?', async (req, res) => {
+    // app.get('/:widget?/:region/:class?', async (req, res) => {
     let widget = false;
     let tour = false;
     let ui = false;
@@ -309,91 +308,85 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
                 break;
             default:
                 region = req.params.a.toUpperCase();
-                if (regions[region] && regions[region].tour){
+                if (regions[region] && regions[region].tour) {
                     tour = true;
                     tourType = region;
                 }
                 break;
         }
 
-        if(req.params.b != undefined){
+        if (req.params.b != undefined) {
             region = req.params.b.toUpperCase();
-            if (regions[region] && regions[region].tour){
+            if (regions[region] && regions[region].tour) {
                 tour = true;
                 tourType = region;
             }
         }
 
-        if((widget && tour) || (ui && tour)){
+        if ((widget && tour) || (ui && tour)) {
             region = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
             cclass = req.params.d != undefined ? req.params.d.toUpperCase() : undefined;
         }
-        else if(widget || tour || ui){
+        else if(tour){
+            region = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
+            cclass = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
+            if(region == "CLASSES"){
+                cclass = region;
+                region = undefined;
+            }
+        }
+        else if (widget || ui) {
             region = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
             cclass = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
         }
-        else{
+        else {
             region = req.params.a != undefined ? req.params.a.toUpperCase() : undefined;
             cclass = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
         }
 
-        if(tour && region && region.length < 5){
+        if (tour &&  !region && cclass == "CLASSES") {
+            const { _url, _region } = await getRedirect(regions[tourType].url, undefined);
+            region = _region;
+        }
+        else if(tour && (!region || region.length < 5)){
             cclass = region;
             const { _url, _region } = await getRedirect(regions[tourType].url, undefined);
             region = _region;
-            res.redirect((ui ? '/ui/' : '/') + tourType +"/" + region + "/" + cclass);
-            return;
         }
-        else if(tour && !region){
-            const { _url, _region } = await getRedirect(regions[tourType].url, undefined);
-            region = _region;
-            res.redirect((ui ? '/ui/' : widget ? '' : '/')+ tourType +"/" + region + "/");
-            return;
-        }
-
-        if(!tour && (ui && !region)){
+        
+        if (!tour && (ui && !region)) {
             res.redirect('/');
             return;
         }
-
+        
         if (!tour && !regions.hasOwnProperty(region)) {
             res.status(500).send(errorCode("Region not found", widget));
             return;
         }
 
         let region_dict = {}
-        if(tour){
-            region_dict = {...regions[tourType]};
-            if(region != undefined){
+        if (tour) {
+            region_dict = { ...regions[tourType] };
+            if (region != undefined) {
                 region_dict.url = region_dict.url + region + "/";
             }
             else {
                 region_dict.url = region_dict.url;
             }
         }
-        else{
+        else {
             region_dict = regions[region];
         }
 
         ppax = cclass != undefined ? true : false;
         toggle = cclass != undefined && cclass != "PAX" ? false : true;
-        if(region_dict.software == "axware"){
+        if (region_dict.software == "axware") {
             data = await axware(region, region_dict, cclass, widget)
-            if(ui){
-                res.send(uiBuilder(data, region, new Date().toLocaleString(), ppax, toggle, cclass));
-            }
-            else {
-                res.json(data);
-            }
+            res.json(data);
         }
-        else if(region_dict.software == "pronto"){
+        else if (region_dict.software == "pronto") {
             data = await pronto(region, region_dict, cclass, widget)
-            if(ui){
-                res.send(uiBuilder(data, region, new Date().toLocaleString(), ppax, toggle, cclass));
-            }
-            else {
-                res.json(data);
-            }
+            res.json(data);
         }
         else {
             res.status(500).send(errorCode("Timing Software not defined", widget));
@@ -411,7 +404,7 @@ app.listen(PORT, () => {
 
 async function axware(region_name, region, cclass, widget = false) {
     const url = region.url;
-    if(!event_stats.hasOwnProperty(region_name)){
+    if (!event_stats.hasOwnProperty(region_name)) {
         event_stats[region_name] = {};
     }
     let stats = event_stats[region_name];
@@ -438,14 +431,14 @@ async function axware(region_name, region, cclass, widget = false) {
             for (row = 0; row < format.length; row++) {
                 let columns = $(parse[index]).find('td');
                 let classElem = $(parse[index]).find('th');
-                if(classElem.length > 0){
+                if (classElem.length > 0) {
                     currentClass = $(classElem).text().trim().split(" ")[0].toUpperCase();
                     results[currentClass] = new_results(widget);
                 }
                 if (currentClass != "" && columns.length > 1) {
                     let format_offset = 0;
                     for (col = 0; col < columns.length; col++) {
-                        element = format[row][col-format_offset];
+                        element = format[row][col - format_offset];
                         if (element == null || element == undefined) {
                             ;
                         }
@@ -454,7 +447,7 @@ async function axware(region_name, region, cclass, widget = false) {
                         }
                         else if (element.startsWith("t-")) {
                             const before = parseInt(element.split("-")[1]);
-                            for (col; col < columns.length-before-1; col++, format_offset++) {
+                            for (col; col < columns.length - before - 1; col++, format_offset++) {
                                 temp.times.push(simplifyTime($(columns[col]).text().trim()));
                             }
                         }
@@ -480,7 +473,7 @@ async function axware(region_name, region, cclass, widget = false) {
 
                 temp.class = currentClass;
                 temp.index = temp.index.toUpperCase();
-                if(temp.index.startsWith(currentClass)){
+                if (temp.index.startsWith(currentClass)) {
                     temp.index = temp.index.slice(currentClass.length).trim();
                 }
 
@@ -492,7 +485,7 @@ async function axware(region_name, region, cclass, widget = false) {
 
                 temp.position = temp.position.split("T")[0];
                 intPosition = parseInt(temp.position)
-                if(widget){
+                if (widget) {
                     if (stats.hasOwnProperty(temp.driver)) {
                         if (intPosition < stats[temp.driver].position) {
                             temp.color = color_upPos;
@@ -525,7 +518,7 @@ async function axware(region_name, region, cclass, widget = false) {
                     // put me in 10th if I am outisde top 10
                     results[temp.class]["10"] = { ...temp }
                 }
-                if(widget){
+                if (widget) {
                     stats[temp.driver] = { "position": intPosition, "runs": runs }
                 }
                 temp = {}
@@ -537,13 +530,13 @@ async function axware(region_name, region, cclass, widget = false) {
         };
 
         if (cclass != undefined) {
-            if(cclass == "PAX"){
+            if (cclass == "PAX") {
                 return pax(results, widget);
             }
             else if (widget && results.hasOwnProperty(cclass)) {
-                return  results[cclass];
+                return results[cclass];
             }
-            else if (results.hasOwnProperty(cclass)){
+            else if (results.hasOwnProperty(cclass)) {
                 return Object.values(results[cclass]);
             }
             else if (cclass != "CLASSES") {
@@ -551,14 +544,14 @@ async function axware(region_name, region, cclass, widget = false) {
             }
             else if (cclass == "CLASSES") {
                 ret = []
-                for(const key in results){
+                for (const key in results) {
                     ret.push(key);
                 }
                 return ret
             }
         }
         else {
-            for(const key in results){
+            for (const key in results) {
                 results[key] = Object.values(results[key]);
             }
             return results
@@ -574,188 +567,188 @@ async function pronto(region_name, region, cclass, widget = false) {
     let backup = [];
     let doPax = false;
 
-    if(cclass == undefined){
-        if(region_name){
+    if (cclass == undefined) {
+        if (region_name) {
             class_offset = region_name.includes("NATS") ? region.data.nats_offset : region.data.classes_offset
         }
         classes = await getProntoClasses(region.url, class_offset);
     }
     else {
-        if(region_name){
+        if (region_name) {
             class_offset = region_name.includes("NATS") ? region.data.nats_offset : region.data.classes_offset
         }
         backup = await getProntoClasses(region.url, class_offset);
     }
 
-    if(cclass == "CLASSES"){
+    if (cclass == "CLASSES") {
         return await getProntoClasses(region.url, class_offset);
     }
 
-    if(!event_stats.hasOwnProperty(region_name)){
+    if (!event_stats.hasOwnProperty(region_name)) {
         event_stats[region_name] = {};
     }
     let stats = event_stats[region_name];
 
     try {
         // loop through all classes
-    let results = {};
-    for (let idx = 0; idx < classes.length; idx++) {
-        let url = "";
-        let currentClass = classes[idx];
+        let results = {};
+        for (let idx = 0; idx < classes.length; idx++) {
+            let url = "";
+            let currentClass = classes[idx];
 
-        if(currentClass == "PAX"){
-            if(await checkUrlExists(region.url + "PaxIndexOverall.html")){
-                url = region.url + "PaxIndexOverall.html";
-            }
-            else if(await checkUrlExists(region.url + "PaxIndexDay1.html")){
-                url = region.url + "PaxIndexDay1.html";
-            }
-            else {
-                doPax = true;
-                classes = backup;
-                currentClass = classes[idx];
-                url = region.url + currentClass + ".php";
-                cclass = undefined;
-            }
-        }
-        else {
-            url = region.url + currentClass + ".php";
-        }
-
-        const { data } = await axios.get(url);
-        const $ = cheerio.load(data);
-        const liveElements = $(region.data.element);
-        const targetElement = liveElements.eq(region.data.offset);
-        const parse = targetElement.find('tr');
-
-        const format = cclass == "PAX" ? region.pax : region.format;
-
-        let temp = {};
-        let eligible = {};
-        let valid = true;
-        results[currentClass] = new_results(widget);
-
-        start_index = region.data.row_offset ? region.data.row_offset : 1;
-        for (index = start_index; index < parse.length; index++) {
-            temp = {}
-            temp.times = []
-            bestIndices = []
-            for (row = 0; row < format.length; row++) {
-                if(index == start_index){
-                    for(test = 0; test < 5; test++){
-                        let columns = $(parse[index]).find('td');
-                        test_value = $(columns[0]).text().trim();
-                        if(test_value == "T" || test_value == "1"){
-                            break;
-                        }
-                        index++;
-                    }
+            if (currentClass == "PAX") {
+                if (await checkUrlExists(region.url + "PaxIndexOverall.html")) {
+                    url = region.url + "PaxIndexOverall.html";
                 }
-                let columns = $(parse[index]).find('td');
-
-
-                if (columns.length > 1) {
-                    for (col = 0; col < columns.length; col++) {
-                        element = format[row][col];
-                        if (element == null) {
-                            ;
-                        }
-                        else if (element == "t") {
-                            let txt = $(columns[col]).text().trim();
-                            const html = $(columns[col]).html().trim();
-                            if(html.startsWith("<s>")){
-                                txt = txt + "+OFF";
-                            }
-                            if(html.startsWith("<b>")){
-                                bestIndices.push(temp.times.length);
-                            }
-                            temp.times.push(simplifyTime(txt.replace(/\(/g, '+').replace(/\)/g, '')));
-                        }
-                        else {
-                            temp[element] = $(columns[col]).text().trim() == "" ? "-" : $(columns[col]).text().trim();
-                        }
-                    }
-                    if (row + 1 < format.length) {
-                        index++;
-                    }
+                else if (await checkUrlExists(region.url + "PaxIndexDay1.html")) {
+                    url = region.url + "PaxIndexDay1.html";
                 }
                 else {
-                    valid = false;
-                    break;
+                    doPax = true;
+                    classes = backup;
+                    currentClass = classes[idx];
+                    url = region.url + currentClass + ".php";
+                    cclass = undefined;
                 }
             }
-
-            if (valid) {
-                temp.driver = toTitleCase(temp.driver);
+            else {
+                url = region.url + currentClass + ".php";
             }
 
-            if (valid && eligibleName(temp.driver, eligible)) {
-                store = temp.class;
-                temp.class = currentClass;
-                if(temp.index == undefined || temp.index.trim() == ""){
-                    temp.index = currentClass.toUpperCase();
-                } else {
-                    temp.index = temp.index.toUpperCase();
-                }
-                if(temp.index.startsWith(currentClass) && temp.index != currentClass){
-                    temp.index = temp.index.slice(currentClass.length).trim();
-                }
-                if(temp.offset == undefined || temp.offset == ""){ temp.offset = "-" }
-                temp.offset = temp.offset.replace(/\(/g, '+').replace(/\)/g, '');
-                temp.pax = simplifyTime(temp.pax);
+            const { data } = await axios.get(url);
+            const $ = cheerio.load(data);
+            const liveElements = $(region.data.element);
+            const targetElement = liveElements.eq(region.data.offset);
+            const parse = targetElement.find('tr');
 
-                intPosition = parseInt(temp.position)
-                if(widget){
-                    if (stats.hasOwnProperty(temp.driver)) {
-                        if (intPosition < stats[temp.driver].position) {
-                            temp.color = color_upPos;
+            const format = cclass == "PAX" ? region.pax : region.format;
+
+            let temp = {};
+            let eligible = {};
+            let valid = true;
+            results[currentClass] = new_results(widget);
+
+            start_index = region.data.row_offset ? region.data.row_offset : 1;
+            for (index = start_index; index < parse.length; index++) {
+                temp = {}
+                temp.times = []
+                bestIndices = []
+                for (row = 0; row < format.length; row++) {
+                    if (index == start_index) {
+                        for (test = 0; test < 5; test++) {
+                            let columns = $(parse[index]).find('td');
+                            test_value = $(columns[0]).text().trim();
+                            if (test_value == "T" || test_value == "1") {
+                                break;
+                            }
+                            index++;
                         }
-                        else if (intPosition > stats[temp.driver].position) {
-                            temp.color = color_downPos;
+                    }
+                    let columns = $(parse[index]).find('td');
+
+
+                    if (columns.length > 1) {
+                        for (col = 0; col < columns.length; col++) {
+                            element = format[row][col];
+                            if (element == null) {
+                                ;
+                            }
+                            else if (element == "t") {
+                                let txt = $(columns[col]).text().trim();
+                                const html = $(columns[col]).html().trim();
+                                if (html.startsWith("<s>")) {
+                                    txt = txt + "+OFF";
+                                }
+                                if (html.startsWith("<b>")) {
+                                    bestIndices.push(temp.times.length);
+                                }
+                                temp.times.push(simplifyTime(txt.replace(/\(/g, '+').replace(/\)/g, '')));
+                            }
+                            else {
+                                temp[element] = $(columns[col]).text().trim() == "" ? "-" : $(columns[col]).text().trim();
+                            }
                         }
-                        else if (temp.times.length > stats[temp.driver].runs) {
-                            temp.color = color_newTime;
+                        if (row + 1 < format.length) {
+                            index++;
+                        }
+                    }
+                    else {
+                        valid = false;
+                        break;
+                    }
+                }
+
+                if (valid) {
+                    temp.driver = toTitleCase(temp.driver);
+                }
+
+                if (valid && eligibleName(temp.driver, eligible)) {
+                    store = temp.class;
+                    temp.class = currentClass;
+                    if (temp.index == undefined || temp.index.trim() == "-") {
+                        temp.index = currentClass.toUpperCase();
+                    } else {
+                        temp.index = temp.index.toUpperCase();
+                    }
+                    if (temp.index.startsWith(currentClass) && temp.index != currentClass) {
+                        temp.index = temp.index.slice(currentClass.length).trim();
+                    }
+                    if (temp.offset == undefined || temp.offset == "") { temp.offset = "-" }
+                    temp.offset = temp.offset.replace(/\(/g, '+').replace(/\)/g, '');
+                    temp.pax = simplifyTime(temp.pax);
+
+                    intPosition = parseInt(temp.position)
+                    if (widget) {
+                        if (stats.hasOwnProperty(temp.driver)) {
+                            if (intPosition < stats[temp.driver].position) {
+                                temp.color = color_upPos;
+                            }
+                            else if (intPosition > stats[temp.driver].position) {
+                                temp.color = color_downPos;
+                            }
+                            else if (temp.times.length > stats[temp.driver].runs) {
+                                temp.color = color_newTime;
+                            }
+                            else {
+                                temp.color = color_none;
+                            }
                         }
                         else {
                             temp.color = color_none;
                         }
                     }
-                    else {
-                        temp.color = color_none;
+
+                    runs = temp.times.length;
+                    for (i = 0; i < bestIndices.length; i++) {
+                        temp.times = bestTime(temp.times, bestIndices[i], widget);
                     }
+                    temp.times = beautifyTimes(temp.times, -1, widget)
+
+                    if (!results.hasOwnProperty(temp.class)) {
+                        ;
+                    }
+                    else if (!widget || intPosition <= 10) {
+                        results[temp.class][temp.position] = { ...temp }
+                        results[temp.class][temp.position].class = store;
+                    }
+                    else if (temp.driver == user_driver) {
+                        // put me in 10th if I am outisde top 10
+                        results[temp.class]["10"] = { ...temp }
+                        results[temp.class]["10"].class = store;
+                    }
+                    if (widget) {
+                        stats[temp.driver] = { "position": intPosition, "runs": runs }
+                    }
+                    temp = {}
+                }
+                else {
+                    valid = true;
                 }
 
-                runs = temp.times.length;
-                for (i = 0; i < bestIndices.length; i++) {
-                    temp.times = bestTime(temp.times, bestIndices[i], widget);
-                }
-                temp.times = beautifyTimes(temp.times, -1, widget)
-
-                if (!results.hasOwnProperty(temp.class)) {
-                    ;
-                }
-                else if (!widget || intPosition <= 10) {
-                    results[temp.class][temp.position] = { ...temp }
-                    results[temp.class][temp.position].class = store;
-                }
-                else if (temp.driver == user_driver) {
-                    // put me in 10th if I am outisde top 10
-                    results[temp.class]["10"] = { ...temp }
-                    results[temp.class]["10"].class = store;
-                }
-                if(widget){
-                    stats[temp.driver] = { "position": intPosition, "runs": runs }
-                }
-                temp = {}
-            }
-            else {
-                valid = true;
-            }
-
-        };
-    }
+            };
+        }
         if (cclass != undefined) {
-            if(cclass == "PAX"){
+            if (cclass == "PAX") {
                 return widget ? results["PAX"] : flatten(results);
             }
             else if (results.hasOwnProperty(cclass)) {
@@ -766,7 +759,7 @@ async function pronto(region_name, region, cclass, widget = false) {
             }
         }
         else {
-            for(const key in results){
+            for (const key in results) {
                 results[key] = Object.values(results[key]);
             }
 
@@ -826,14 +819,18 @@ function getYesterdate() {
 //     }
 // }
 
-// archiveJson("TOUR", regions["TOUR"]);
 async function archiveJson(name, region) {
     try {
         const response = await axios.get(region.url);
         const htmlContent = response.data;
-        const filepath = "archive/"
+        const filepath = `archive/${name}/`;
+        fs.mkdir(filepath, { recursive: true }, (err) => {
+            if (err) {
+                console.error('Error creating directories:', err);
+            } 
+        });
 
-        date = "fixme-"+getYesterdate();
+        date = "fixme-" + getYesterdate();
         const regex = /Live Results - Generated:\s*\w+ (\d{2}-\d{2}-\d{4}) \d{2}:\d{2}:\d{2}/;
         match = htmlContent.match(regex);
 
@@ -842,18 +839,18 @@ async function archiveJson(name, region) {
             const formattedYear = year.slice(2);
             date = `${month}-${day}-${formattedYear}`;
         }
-        else if(region.tour){
+        else if (region.tour) {
             const regex = /Sportity Event Password:\s*([A-Za-z0-9]+)/;
             match = htmlContent.match(regex);
             date = match ? match[1] : date;
         }
 
-        const filename = filepath+`${name}_${date}.json`;
+        const filename = filepath + `${name}_${date}.json`;
         let content = {};
-        if(region.software == "axware"){
+        if (region.software == "axware") {
             content = await axware(name, region, undefined, false);
         }
-        else if(region.software == "pronto"){
+        else if (region.software == "pronto") {
             content = await pronto(name, region, undefined, false);
         }
         else {
@@ -862,7 +859,7 @@ async function archiveJson(name, region) {
         }
 
         // Write the HTML content to a file
-        if(Object.keys(content).length > 0){
+        if (Object.keys(content).length > 0) {
             fs.writeFileSync(filename, JSON.stringify(content), 'utf8');
         }
     } catch (error) {
@@ -877,7 +874,7 @@ function toTitleCase(str) {
 }
 
 function simplifyTime(_string) {
-    if(_string == undefined){
+    if (_string == undefined) {
         return "999.99";
     }
 
@@ -902,12 +899,12 @@ function simplifyTime(_string) {
 }
 
 function bestTime(times, bestIdx, widget) {
-    if(!widget){
+    if (!widget) {
         return times;
     }
 
     split = times[bestIdx].split("+")
-    if(split.length > 1){
+    if (split.length > 1) {
         split[1] = split[1] + "[/c]"
     }
 
@@ -918,37 +915,37 @@ function bestTime(times, bestIdx, widget) {
 }
 
 function beautifyTimes(times, bestIdx, widget) {
-    if(!widget){
+    if (!widget) {
         return times;
     }
 
     arr = []
     for (i = 0; i < times.length; i++) {
-        if(times.length > 8 && times[i].includes("[b]")){
+        if (times.length > 8 && times[i].includes("[b]")) {
             arr.push(times[i])
         }
 
-        if(times[i].startsWith("[b]")){
+        if (times[i].startsWith("[b]")) {
             continue;
         }
         split = times[i].split("+")
-        if(split.length > 1){
+        if (split.length > 1) {
             split[1] = split[1] + "[/c]"
         }
-        if(i == bestIdx){
+        if (i == bestIdx) {
             split[0] = "[b][c=#ff54ccff]" + split[0] + "[/c][/b]"
         }
         times[i] = split.join("[c=#ffde6868]+")
 
     }
 
-    if(times.length > 8){
+    if (times.length > 8) {
         retval = arr.join('   ').trim();
     }
     else {
         retval = times.join('   ').trim();
     }
-    if(retval == "") { retval = " " }
+    if (retval == "") { retval = " " }
     return retval;
 }
 
@@ -1003,33 +1000,33 @@ function eligibleName(name, namesObj) {
     }
 }
 
-function flatten(results){
+function flatten(results) {
     const flattenedData = [];
     Object.keys(results).forEach(cclass => {
-    Object.keys(results[cclass]).forEach(entryId => {
-        const entryData = results[cclass][entryId];
-        if (typeof entryData === 'object' && entryData !== null) {
-            flattenedData.push(entryData);
-        }
-    });
+        Object.keys(results[cclass]).forEach(entryId => {
+            const entryData = results[cclass][entryId];
+            if (typeof entryData === 'object' && entryData !== null) {
+                flattenedData.push(entryData);
+            }
+        });
     });
 
     return flattenedData;
 }
 
-function pax(results, widget){
+function pax(results, widget) {
     ret = {}
 
     const flattenedData = flatten(results)
     paxSort(flattenedData);
 
-    for(i = 0; i < flattenedData.length; i++){
-        flattenedData[i].position = (i+1).toString();
-        if(i > 0){
-            const paxA = parseFloat(flattenedData[i-1].pax);
+    for (i = 0; i < flattenedData.length; i++) {
+        flattenedData[i].position = (i + 1).toString();
+        if (i > 0) {
+            const paxA = parseFloat(flattenedData[i - 1].pax);
             const paxB = parseFloat(flattenedData[i].pax);
 
-            if(isNaN(paxB)){
+            if (isNaN(paxB)) {
                 flattenedData[i].offset = "-";
             }
             else {
@@ -1037,11 +1034,11 @@ function pax(results, widget){
             }
         }
 
-        if(widget){
-            if(i < 10){
-                ret[(i+1).toString()] = flattenedData[i];
+        if (widget) {
+            if (i < 10) {
+                ret[(i + 1).toString()] = flattenedData[i];
             }
-            else if(flattenedData[i].driver == user_driver){
+            else if (flattenedData[i].driver == user_driver) {
                 ret["10"] = flattenedData[i];
                 break;
             }
@@ -1055,40 +1052,40 @@ function paxSort(data) {
     return data.sort((a, b) => {
         let stringA = a.pax.trim();
         let stringB = b.pax.trim();
-        if(stringA == "OFF" || stringA == "DNF" || stringA == "DSQ" || stringA == ""){
+        if (stringA == "OFF" || stringA == "DNF" || stringA == "DSQ" || stringA == "") {
             stringA = "DNF";
         }
-        if(stringB == "OFF" || stringB == "DNF" || stringB == "DSQ" || stringB == ""){
+        if (stringB == "OFF" || stringB == "DNF" || stringB == "DSQ" || stringB == "") {
             stringB = "DNF";
         }
 
-        if(stringA == "NO TIME"){
+        if (stringA == "NO TIME") {
             stringA = "DNS";
         }
-        if(stringB == "NO TIME"){
+        if (stringB == "NO TIME") {
             stringB = "DNS";
         }
 
-        if(stringA == "DNS" && stringB == "DNS"){
+        if (stringA == "DNS" && stringB == "DNS") {
             return 0;
         }
-        else if(stringA == "DNS"){
+        else if (stringA == "DNS") {
             return 1;
         }
-        else if(stringB == "DNS"){
+        else if (stringB == "DNS") {
             return -1;
         }
         else
 
-        if(stringA == "DNF" && stringB == "DNF"){
-            return 0;
-        }
-        else if(stringA == "DNF"){
-            return 1;
-        }
-        else if(stringB == "DNF"){
-            return -1;
-        }
+            if (stringA == "DNF" && stringB == "DNF") {
+                return 0;
+            }
+            else if (stringA == "DNF") {
+                return 1;
+            }
+            else if (stringB == "DNF") {
+                return -1;
+            }
         const paxA = parseFloat(a.pax);
         const paxB = parseFloat(b.pax);
 
@@ -1130,9 +1127,9 @@ async function getProntoClasses(url, offset) {
         targetElement.find('a').each((index, element) => {
             let link = $(element).attr('href');
             if (link) {
-            // Remove the '.php' extension if it exists
-            link = link.replace('.php', '');
-            linksArray.push(link);
+                // Remove the '.php' extension if it exists
+                link = link.replace('.php', '');
+                linksArray.push(link);
             }
         });
 
@@ -1145,198 +1142,12 @@ async function getProntoClasses(url, offset) {
     }
 }
 
-function uiBuilder(jsonData, name = "AutoX", date = new Date().toLocaleString(), pax = false, toggle = true, cclass = "PAX") {
-    jsonLength = Object.keys(jsonData).length
-    classesOnly = jsonLength >= 12 ? true : false;
-
-    // Function to generate table rows for each entry
-    function generateTableRows(entries) {
-        let rows = '';
-        entries.forEach((entry, index) => {
-            const rowClass = index % 2 === 0 ? 'rowlow' : 'rowhigh';
-            if(entry.times.length > 0){
-                bestTimeIndex = findBestTimeIndex(entry.times);
-                entry.times[bestTimeIndex] = `<b style="border: 1px solid black; padding: 2px; color: black;">${entry.times[bestTimeIndex]}</b>`;
-            }
-            numTimes = entry.times.length/2;
-            numTimes = numTimes == 0 ? 0 : numTimes > 3 ? numTimes : 3;
-            rows += `<tr class="${rowClass}">
-                <td style="width:5%;" nowrap align="center">${entry.position}</td>
-                <td style="width:7%;" nowrap align="right">${entry.index}</td>
-                <td style="width:5%;" nowrap align="right">${entry.number}</td>
-                <td style="width:40%;" nowrap align="left">${entry.driver}</td>
-                <td style="width:7%;" nowrap ><font class='bestt'>${entry.pax}</font></td>`
-                for(i = 0; i < numTimes; i+=1){
-                    rows +=`<td valign="top" nowrap >${entry.times[i] || ''}</td>`
-                 }
-            rows += `
-            </tr>
-            <tr class="${rowClass}">
-                <td nowrap align="center"></td>
-                <td nowrap align="right"></td>
-                <td nowrap align="right"></td>
-                <td nowrap align="left">${entry.car}</td>
-                <td nowrap >${entry.offset}</td>`
-                for(i = numTimes; i < numTimes*2; i+=1){
-                    rows +=`<td valign="top" nowrap >${entry.times[i] || ''}</td>`
-                 }
-
-            rows += `</tr>`;
-        });
-        return rows;
-    }
-    try {
-        // Generate the HTML content
-        let htmlContent = `
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <title>Updated: ${date}</title>
-            <style>
-                body { margin: 0; padding: 0; width: 98vw; max-width: 100%; font-family: Verdena; }
-                .rowhigh { background-color: #e6e6e8; }
-                .rowlow { background-color: #FFFFFF; }
-                h1, h2, h3 { text-align: center; font-family: Arial; color: #0000FF; }
-                th { color: #FFFFFF; background-color: #152bed; }
-                table { width: 100%; border-collapse: collapse; }
-                th, td { padding: 8px; text-align: center; }
-                a { color: blue; text-decoration: none; }
-                .bestt { font-weight: bold; }
-                .toggle-button {
-                    position: absolute;
-                    top: 10px;
-                    right: 1.5%;
-                    padding: 10px 20px;
-                    background-color: #007BFF;
-                    color: white;
-                    border: none;
-                    cursor: pointer;
-                    font-size: 14px;
-                    border-radius: 5px;
-                }
-                .button-container {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 10px;
-                    justify-content: center;
-                    padding: 10px;
-                }
-
-                .staggered-button {
-                    padding: 5px 15px;
-                    background-color: #007BFF;
-                    color: white;
-                    border: none;
-                    cursor: pointer;
-                    font-size: 12px;
-                    border-radius: 4px;
-                    transition: background-color 0.3s ease;
-                }
-
-                .staggered-button:hover, .toggle-button:hover {
-                    background-color: #0056b3;
-                }
-            </style>
-            <script>
-                function toggleURL(add = "pax") {
-                    const currentURL = window.location.href;
-                    const url = new URL(currentURL);
-
-                    // Get the current pathname without hash or query parameters
-                    let pathParts = url.pathname.split('/').filter(part => part !== ''); // Remove empty parts
-
-                    if (add === "pax") {
-                        if (pathParts.includes('pax')) {
-                            // Remove 'pax' from the path
-                            pathParts.splice(pathParts.indexOf('pax'), 1);
-                        } else {
-                            // Add 'pax' to the end of the path
-                            pathParts.push('pax');
-                        }
-                    } else {
-                        // Add the provided value to the end of the path
-                        pathParts.push(add);
-                    }
-
-                    // Rebuild the URL path
-                    url.pathname = '/' + pathParts.join('/');
-
-                    // Remove the hash from the URL if it exists
-                    url.hash = '';
-
-                    // Update the URL in the browser, avoiding any trailing slash unless it's the root
-                    window.location.href = url.toString();
-                }
-            </script>
-        </head>
-        <body>
-            <button class="toggle-button" onClick="toggleURL()" style="display: ${toggle ? 'block' : 'none'}">Toggle ${pax ? 'Class' : 'PAX'}</button>
-            <h2>${name.toUpperCase()} Results</h2>
-            <table class='live' cellpadding='3' cellspacing='1' style='border-collapse: collapse' align='center'>
-                <tbody>
-                    <tr class="rowlow">
-                        <th nowrap align="center">Region - ${name}</th>
-                    </tr>
-                    <tr class="rowlow">
-                        <th nowrap align="center">Updated: ${date}</th>
-                    </tr>
-                </tbody>
-            </table>
-            <a name="#top"></a>
-                <table class='live' border='0' cellspacing='5' width='80%' cellpadding='3' style='border-collapse: collapse; word-wrap: break-word; table-layout: fixed;' align='center'>
-                    <tbody>
-                        <div class="button-container" style="display: ${pax ? "none" : "flex"}">
-                            ${pax ? '' : Object.keys(jsonData).map(category => `
-                                <button class="staggered-button" onclick="${classesOnly ? `toggleURL('${category}')` : `location.href='#${category}'`}">${category}</button>
-                            `).join('')}
-                        </div>
-                    </tbody>
-                </table>
-        `;
-        // Iterate over each category (P, T, S, etc.)
-        if (pax) {
-            htmlContent += `
-            <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
-            <tbody>
-            <tr class="rowlow">
-            <th nowrap rowspan="1" colspan="100" align="left"><a name="PAX"></a> ${cclass} - Total Entries: ${jsonData.length}</th>
-            </tr>
-            ${generateTableRows(jsonData)}
-            </tbody>
-            </table>`;
-        } else if(!classesOnly) {
-            for (const category in jsonData) {
-                if (jsonData.hasOwnProperty(category)) {
-                    htmlContent += `
-                    <table class='live' width='100%' cellpadding='3' cellspacing='1' style='border-collapse: collapse' border='1' align='center'>
-                    <tbody>
-                    <tr class="rowlow">
-                    <th nowrap rowspan="1" colspan="100" align="left"><a name="${category}"></a> ${category} - Total Entries: ${jsonData[category].length}</th>
-                    </tr>
-                        ${generateTableRows(jsonData[category])}
-                    </tbody>
-                    </table>`;
-                }
-            }
-        }
-
-        htmlContent += `
-        </body>
-        </html>`;
-
-        return htmlContent;
-    } catch (error) {
-        console.error(jsonData, "->", error)
-        return jsonData;
-    }
-}
-
-function errorCode(error, widget, type = "string", res = undefined){
-    if(widget){
-        if(type == "error"){
+function errorCode(error, widget, type = "string", res = undefined) {
+    if (widget) {
+        if (type == "error") {
             err = error.stack.split('\n')[0].split(':');
             results = new_results(true);
-            results["1"].driver =  err[0];
+            results["1"].driver = err[0];
             results["1"].number = error.response ? error.response.status : '-1';
             results["1"].times = err[1];
             results["1"].color = color_downPos;
@@ -1350,12 +1161,12 @@ function errorCode(error, widget, type = "string", res = undefined){
             return results;
         }
     }
-    else{
+    else {
         return error;
     }
 }
 
-async function getRedirect(url, region = undefined){
+async function getRedirect(url, region = undefined) {
     // Fetch the HTML from the URL
     let html = "";
 
@@ -1369,7 +1180,7 @@ async function getRedirect(url, region = undefined){
             const redirectUrl = new URL(redirectMatch[1], url).href; // Resolve relative URL
 
             redirectArr = redirectUrl.split("index.php")[0].split("/")
-            region = redirectArr[redirectArr.length-2].toUpperCase();
+            region = redirectArr[redirectArr.length - 2].toUpperCase();
             return { _url: url, _region: region };
         } else {
             return { _url: url, _region: undefined };
