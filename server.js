@@ -30,6 +30,11 @@ const regions = getJsonData('data/regions.json');
 const settings = getJsonData('data/settings.json');
 const user_driver = settings.user;
 
+paxIndex = {}
+fetchPaxIndex().then(classIndexDict => {
+    paxIndex = classIndexDict;
+});
+
 // Schedule the task to run every Monday at 00:00
 cron.schedule('0 0 * * 1', async function () {
     for (const key in regions) {
@@ -38,6 +43,10 @@ cron.schedule('0 0 * * 1', async function () {
             archiveJson(key, regions[key]);
         }
     }
+
+    fetchPaxIndex().then(classIndexDict => {
+        paxIndex = classIndexDict;
+    });
 });
 
 let event_stats = {};
@@ -473,7 +482,7 @@ async function axware(region_name, region, cclass, widget = false) {
 
                 temp.class = currentClass;
                 temp.index = temp.index.toUpperCase();
-                if (temp.index.startsWith(currentClass)) {
+                if (temp.index.startsWith(currentClass) && temp.index != currentClass && temp.index.length > 2) {
                     temp.index = temp.index.slice(currentClass.length).trim();
                 }
 
@@ -506,7 +515,14 @@ async function axware(region_name, region, cclass, widget = false) {
                 }
 
                 runs = temp.times.length;
-                temp.times = beautifyTimes(temp.times, findBestTimeIndex(temp.times), widget);
+                bestIndex = findBestTimeIndex(temp.times)
+                bestRawTime = convertToSeconds(temp.times[bestIndex]);
+                if(widget && cclass == "RAW"){
+                    temp.pax = String(bestRawTime.toFixed(3));
+                } else if(bestIndex > 0 && bestRawTime == convertToSeconds(temp.pax) && paxIndex[temp.index] != undefined){
+                    temp.pax = String((bestRawTime * paxIndex[temp.index]).toFixed(3));
+                }
+                temp.times = beautifyTimes(temp.times, bestIndex, widget);
 
                 if (!results.hasOwnProperty(temp.class)) {
                     ;
@@ -532,6 +548,14 @@ async function axware(region_name, region, cclass, widget = false) {
         if (cclass != undefined) {
             if (cclass == "PAX") {
                 return pax(results, widget);
+            }
+            else if (cclass == "RAW") {
+                if(widget){
+                    return pax(results, widget);
+                }
+                else {
+                    return raw(results, widget);
+                }
             }
             else if (widget && results.hasOwnProperty(cclass)) {
                 return results[cclass];
@@ -566,6 +590,7 @@ async function pronto(region_name, region, cclass, widget = false) {
     let classes = [cclass];
     let backup = [];
     let doPax = false;
+    let doRaw = false;
 
     if (cclass == undefined) {
         if (region_name) {
@@ -611,6 +636,21 @@ async function pronto(region_name, region, cclass, widget = false) {
                     cclass = undefined;
                 }
             }
+            else if (currentClass == "RAW") {
+                if (checkUrlExists(region.url + "RawOverall.html")) {
+                    url = region.url + "RawOverall.html";
+                }
+                else if (checkUrlExists(region.url + "RawDay1.html")) {
+                    url = region.url + "RawDay1.html";
+                }
+                else {
+                    doRaw = true;
+                    classes = backup;
+                    currentClass = classes[idx];
+                    url = region.url + currentClass + ".php";
+                    cclass = undefined;
+                }
+            }
             else {
                 url = region.url + currentClass + ".php";
             }
@@ -621,7 +661,7 @@ async function pronto(region_name, region, cclass, widget = false) {
             const targetElement = liveElements.eq(region.data.offset);
             const parse = targetElement.find('tr');
 
-            const format = cclass == "PAX" ? region.pax : region.format;
+            const format = cclass == "PAX" || cclass == "RAW" ? region.pax : region.format;
 
             let temp = {};
             let eligible = {};
@@ -719,9 +759,45 @@ async function pronto(region_name, region, cclass, widget = false) {
                     }
 
                     runs = temp.times.length;
-                    for (i = 0; i < bestIndices.length; i++) {
-                        temp.times = bestTime(temp.times, bestIndices[i], widget);
+                    if(widget){
+                        for (i = 0; i < bestIndices.length; i++) {
+                            temp.times = bestTime(temp.times, bestIndices[i], widget);
+                        }
                     }
+
+                    if(temp.index[temp.index.length - 1] == "L"){
+                        temp.index = temp.index.slice(0, -1); 
+                    }
+
+                    if((doPax || doRaw) && region.tour) {
+                        const midpoint = Math.ceil(temp.times.length / 2);
+
+                        const day1 = temp.times.slice(0, midpoint);
+                        const day2 = temp.times.slice(midpoint);
+
+                        bestIndex = findBestTimeIndex(day1)
+                        bestIndex2 = findBestTimeIndex(day2)
+
+                        bestRawTime = convertToSeconds(day1[bestIndex], true) + convertToSeconds(day2[bestIndex2], true);
+                        if(doRaw){
+                            temp.pax = String(bestRawTime.toFixed(3));
+                        }
+                        else if (doPax) {
+                            temp.pax = String((bestRawTime * (paxIndex[temp.index] ? paxIndex[temp.index] : 1)).toFixed(3));
+                        }
+                    }
+                    else {
+                        bestIndex = findBestTimeIndex(temp.times)
+                        bestRawTime = convertToSeconds(temp.times[bestIndex]);
+
+                        if(widget && cclass == "RAW"){
+                            temp.pax = String(bestRawTime.toFixed(3));
+                        } else if(bestIndex > 0 && bestRawTime == convertToSeconds(temp.pax) && paxIndex[temp.index] != undefined){
+                            temp.pax = String((bestRawTime * paxIndex[temp.class]).toFixed(3));
+                        }
+                    }
+
+
                     temp.times = beautifyTimes(temp.times, -1, widget)
 
                     if (!results.hasOwnProperty(temp.class)) {
@@ -751,6 +827,9 @@ async function pronto(region_name, region, cclass, widget = false) {
             if (cclass == "PAX") {
                 return widget ? results["PAX"] : flatten(results);
             }
+            if (cclass == "RAW") {
+                return widget ? results["RAW"] : flatten(results);
+            }
             else if (results.hasOwnProperty(cclass)) {
                 return widget ? results[cclass] : flatten(results);
             }
@@ -763,7 +842,7 @@ async function pronto(region_name, region, cclass, widget = false) {
                 results[key] = Object.values(results[key]);
             }
 
-            if (doPax) {
+            if (doPax || doRaw) {
                 return pax(results, widget);
             }
 
@@ -949,8 +1028,8 @@ function beautifyTimes(times, bestIdx, widget) {
     return retval;
 }
 
-function convertToSeconds(time) {
-    if (time == "" || time.includes('DNF') || time.includes('OFF') || time.includes('DSQ') || time.includes("RRN") || time == "NO TIME") {
+function convertToSeconds(time, tour = false) {
+    if (time == undefined || time == "" || time.includes('DNF') || time.includes('OFF') || time.includes('DSQ') || time.includes("RRN") || time == "NO TIME") {
         return Infinity;
     }
 
@@ -960,6 +1039,9 @@ function convertToSeconds(time) {
     if (parts.length > 1) {
         if (parts[1] === 'OFF' || parts[1] === 'DSQ' || parts[1] === 'DNF') {
             return Infinity;
+        }
+        if(tour){
+            return baseTime
         }
         const penalties = parseInt(parts[1], 10);
         return baseTime + (penalties * 2);
@@ -1093,6 +1175,87 @@ function paxSort(data) {
     });
 }
 
+function raw(results, widget) {
+    ret = {}
+
+    const flattenedData = flatten(results)
+    rawSort(flattenedData);
+
+    for (i = 0; i < flattenedData.length; i++) {
+        flattenedData[i].position = (i + 1).toString();
+        if (i > 0) {
+            const paxA = parseFloat(flattenedData[i - 1].pax);
+            const paxB = parseFloat(flattenedData[i].pax);
+
+            if (isNaN(paxB)) {
+                flattenedData[i].offset = "-";
+            }
+            else {
+                flattenedData[i].offset = ((paxB - paxA).toFixed(3)).toString();
+            }
+        }
+
+        if (widget) {
+            if (i < 10) {
+                ret[(i + 1).toString()] = flattenedData[i];
+            }
+            else if (flattenedData[i].driver == user_driver) {
+                ret["10"] = flattenedData[i];
+                break;
+            }
+        }
+    }
+    return widget ? ret : flattenedData;
+}
+
+// Custom sort function to handle numeric and non-numeric 'pax' values
+function rawSort(data) {
+    return data.sort((a, b) => {
+        let stringA = convertToSeconds(a.times[findBestTimeIndex(a.times)]);
+        let stringB = convertToSeconds(b.times[findBestTimeIndex(b.times)]);
+        a.pax = stringA;
+        b.pax = stringB;
+        if (stringA == "OFF" || stringA == "DNF" || stringA == "DSQ" || stringA == "") {
+            stringA = "DNF";
+        }
+        if (stringB == "OFF" || stringB == "DNF" || stringB == "DSQ" || stringB == "") {
+            stringB = "DNF";
+        }
+
+        if (stringA == "NO TIME") {
+            stringA = "DNS";
+        }
+        if (stringB == "NO TIME") {
+            stringB = "DNS";
+        }
+
+        if (stringA == "DNS" && stringB == "DNS") {
+            return 0;
+        }
+        else if (stringA == "DNS") {
+            return 1;
+        }
+        else if (stringB == "DNS") {
+            return -1;
+        }
+        else
+
+            if (stringA == "DNF" && stringB == "DNF") {
+                return 0;
+            }
+            else if (stringA == "DNF") {
+                return 1;
+            }
+            else if (stringB == "DNF") {
+                return -1;
+            }
+            const rawA = parseFloat(stringA);
+            const rawB = parseFloat(stringB);
+
+        return rawA - rawB; // Both are numeric, sort in ascending order
+    });
+}
+
 // Function to check if a URL exists and return a boolean
 async function checkUrlExists(url) {
     try {
@@ -1190,4 +1353,56 @@ async function getRedirect(url, region = undefined) {
     }
 
     return html;
+}
+
+async function fetchPaxIndex() {
+    try {
+        const url = "https://www.solotime.info/pax/";
+
+        // Step 1: Fetch the HTML page using Axios
+        const response = await axios.get(url);
+        const html = response.data;
+
+        // Step 2: Load the HTML content into cheerio for parsing
+        const $ = cheerio.load(html);
+
+        // Find the target table (assuming the first table is the one you want)
+        const tableRows = $("table").eq(0).find('tr');
+
+        const classIndexDict = {};
+
+        // Step 3: Iterate over the table rows
+        for (let index = 0; index < tableRows.length; index++) {
+            let cells = $(tableRows[index]).find('td'); // Get all the <td> elements
+
+            // Iterate over the cells and extract pairs of class and index
+            for (let i = 0; i < cells.length; i += 1) {
+                let carClass = $(cells[i]).text().trim(); // Get class from the current cell
+                if(carClass == ""){
+                    continue;
+                }
+                i++;
+                
+                let indexValue = ""
+                for(; i < cells.length; i++){
+                    indexValue = $(cells[i]).text().trim();
+                    if(indexValue != ""){
+                        break;
+                    }
+                }
+
+                // Check if both class and index are valid and a number before adding them
+                if (carClass && indexValue && !isNaN(parseFloat(indexValue))) {
+                    carClass = carClass.replace(/-/g, "");
+                    classIndexDict[carClass] = parseFloat(indexValue); // Add to dictionary
+                }
+            }
+        }
+
+        // Step 4: Log or return the final dictionary
+        return classIndexDict;
+
+    } catch (error) {
+        console.error('Error fetching or parsing the table:', error);
+    }
 }

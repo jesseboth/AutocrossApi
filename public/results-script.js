@@ -34,7 +34,8 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("header").innerHTML = `${regionData.regionName} ${tour ? "" : "Region"}`
     document.getElementById("updated").innerHTML = `Updated: ${new Date().toLocaleString()}`;
     // document.getElementById("toggle-button").style.display = cclass == undefined || cclass == "PAX" ? "block" : "none";
-    document.getElementById("toggle-button").style.backgroundColor = cclass == "PAX" ? "#ff0000" : "#007BFF";
+    document.getElementById("toggle-pax").style.backgroundColor = cclass == "PAX" ? "#ff0000" : "#007BFF";
+    document.getElementById("toggle-raw").style.backgroundColor = cclass == "RAW" ? "#ff0000" : "#007BFF";
 
     document.getElementById('results').innerHTML = "";  // Clear the results table
 
@@ -257,6 +258,41 @@ async function getResults(cclass = "") {
     return await getData('/' + path + '/' + cclass);
 }
 
+function convertToSeconds(time) {
+    if (time == "" || time.includes('DNF') || time.includes('OFF') || time.includes('DSQ') || time.includes("RRN") || time == "NO TIME") {
+        return Infinity;
+    }
+
+    const parts = time.split('+');
+    const baseTime = parseFloat(parts[0]);
+
+    if (parts.length > 1) {
+        if (parts[1] === 'OFF' || parts[1] === 'DSQ' || parts[1] === 'DNF') {
+            return Infinity;
+        }
+        const penalties = parseInt(parts[1], 10);
+        return baseTime + (penalties * 2);
+    }
+
+    return baseTime;
+}
+
+function findBestTimeIndex(times) {
+    let bestTimeIndex = -1;
+    let bestTime = Infinity;
+
+    for (let i = 0; i < times.length; i++) {
+        const adjustedTime = convertToSeconds(times[i]);
+
+        if (adjustedTime < bestTime) {
+            bestTime = adjustedTime;
+            bestTimeIndex = i;
+        }
+    }
+
+    return bestTimeIndex;
+}
+
 function generateTableRows(entries) {
     let rows = '';  // Initialize an empty string to hold the table rows
     entries.forEach((entry, index) => {
@@ -276,8 +312,14 @@ function generateTableRows(entries) {
           <td style="width:40%;" nowrap align="left">${entry.driver}</td>
           <td style="width:7%;" nowrap><font class='bestt'>${entry.pax}</font></td>`;
 
+        bestTimeIndex = findBestTimeIndex(entry.times);
         for (let i = 0; i < numTimes; i++) {
-            rows += `<td valign="top" nowrap>${entry.times[i] || ''}</td>`;
+            if(i == bestTimeIndex) {
+                rows += `<td valign="top" nowrap><b>${entry.times[i] || ''}</b></td>`;
+            }
+            else {
+                rows += `<td valign="top" nowrap>${entry.times[i] || ''}</td>`;
+            }
         }
 
         rows += `</tr>
@@ -289,7 +331,12 @@ function generateTableRows(entries) {
           <td nowrap>${entry.offset}</td>`;
 
         for (let i = numTimes; i < numTimes * 2; i++) {
-            rows += `<td valign="top" nowrap>${entry.times[i] || ''}</td>`;
+            if(i == bestTimeIndex) {
+                rows += `<td valign="top" nowrap><b>${entry.times[i] || ''}</b></td>`;
+            }
+            else {
+                rows += `<td valign="top" nowrap>${entry.times[i] || ''}</td>`;
+            }
         }
 
         rows += `</tr>`;
