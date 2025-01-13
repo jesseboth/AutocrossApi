@@ -181,8 +181,8 @@ app.get(['/', '/ui'], async (req, res) => {
 app.get('/archive/:a?/:b?/:c?', async (req, res) => {
     getEvents = false;
     event_key = ""
-    ui = false;
     ppax = false;
+    rraw = false;
     getClasses = false;
     cclass = undefined;
 
@@ -190,9 +190,6 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
         switch (req.params.a.toLowerCase()) {
             case "events":
                 getEvents = true;
-                break;
-            case "ui":
-                ui = true;
                 break;
             case "widget":
                 res.status(500).send(errorCode("Widget not available for archived data", true));
@@ -210,6 +207,9 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
                 case "pax":
                     ppax = true;
                     break;
+                case "raw":
+                    rraw = true;
+                    break;
                 default:
                     if (event_key == "") {
                         event_key = req.params.b.toUpperCase();
@@ -226,6 +226,9 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
                 case "pax":
                     ppax = true;
                     break;
+                case "raw":
+                    rraw = true;
+                    break;
                 default:
                     cclass = req.params.c.toUpperCase();
                     break;
@@ -233,7 +236,7 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
         }
 
         let dir = "archive/" + event_key.split("_")[0];
-        if (!ui && getEvents) {
+        if (getEvents) {
             arr = []
             let dirs = await fsp.readdir("archive");
             for(let dir of dirs){
@@ -248,40 +251,22 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
             res.json(arr);
             return;
         }
-        else if (!ui && getClasses) {
+        else if (getClasses) {
             res.json(Object.keys(getJsonData(`${dir}/${event_key}.json`)));
             return;
         }
 
-        if (ui) {
-            if (!event_key) {
-                res.redirect('/archive');
-                return;
-            }
-            event_info = event_key.split("_");
-            if (cclass == undefined) {
-                if (ppax) {
-                    res.send(uiBuilder(pax(getJsonData(`${dir}/${event_key}.json`)), event_info[0], event_info[1], ppax));
-                }
-                else {
-                    res.send(uiBuilder(getJsonData(`${dir}/${event_key}.json`), event_info[0], event_info[1], ppax));
-                }
-            }
-            else {
-                res.send(uiBuilder(getJsonData(`${dir}/${event_key}.json`)[cclass], event_info[0], event_info[1], true, false, cclass));
-            }
-            return;
+        if (ppax) {
+            res.json(pax(getJsonData(`${dir}/${event_key}.json`)));
+        }
+        else if (rraw) {
+            res.json(raw(getJsonData(`${dir}/${event_key}.json`)));
+        }
+        else if (cclass == undefined) {
+            res.json((getJsonData(`${dir}/${event_key}.json`)));
         }
         else {
-            if (ppax) {
-                res.json(pax(getJsonData(`${dir}/${event_key}.json`)));
-            }
-            else if (cclass == undefined) {
-                res.json((getJsonData(`${dir}/${event_key}.json`)));
-            }
-            else {
-                res.json((getJsonData(`${dir}/${event_key}.json`))[cclass]);
-            }
+            res.json((getJsonData(`${dir}/${event_key}.json`))[cclass]);
         }
 
     } catch (err) {
@@ -289,7 +274,6 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
         res.status(500).send(errorCode(err, false));
         return;
     }
-
 });
 
 color_newTime = "#d7d955"
