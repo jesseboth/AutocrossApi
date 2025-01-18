@@ -80,11 +80,11 @@ function toggleURL(add = "pax") {
         // Remove 'pax' from the path
         pathParts.splice(pathParts.indexOf(add), 1);
     } else {
-        pathParts = [archive ? "" : "ui", region, add, ""];
+        pathParts = [archive ? "archive/ui" : "ui", region, add, ""];
         if (archive) {
-            archiveArr = pathParts[1].split("/")
-            uiArr = [archiveArr[0], "ui", archiveArr[1]]
-            pathParts[1] = uiArr.join('/')
+            archiveArr = region.split("/")
+            archiveArr.shift()
+            pathParts[1] = archiveArr.join('/')
         }
     }
 
@@ -137,8 +137,8 @@ function getRegion() {
     } 
     else if(isArchive) {
         return { 
-            region: "archive/" + pathParts[2].toUpperCase(), 
-            regionName: isTour ? tourNames[pathParts[2].toUpperCase()] : pathParts[2].toUpperCase(),
+            region: "archive/" + pathParts[2].toUpperCase() + "/" + pathParts[3].toUpperCase(), 
+            regionName: isTour ? tourNames[pathParts[3].toUpperCase()] : pathParts[3].toUpperCase(),
             isTour: isTour
         };
     }

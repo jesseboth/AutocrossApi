@@ -64,8 +64,12 @@ app.get('/ui/:b/:c?/:d?', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
 });
 
-app.get('/archive/ui/:b/:c?', async (req, res) => {
+app.get('/archive/ui/:b/:c?/:d?', async (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
+});
+
+app.get('/fetch/:a/:b/:c?', async (req, res) => {
+    res.sendFile(path.join(__dirname, req.params.a ? req.params.a : "", req.params.b ? req.params.b : "", req.params.c ? req.params.c : ""));
 });
 
 
@@ -105,18 +109,42 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
             // Add a hidden unordered list to group the files under this directory
             html += `<ul id="${dirId}" class="file-list" style="display: none;">`;
             
-            let files = await fsp.readdir(`archive/${dir}`);
-            
-            for (let file of files) {
-                if (file.includes(".json")) {
-                    const fileName = file.split(".")[0];
-                    html += `
-                        <li>
-                            <a href="/archive/ui/${fileName}">${fileName}</a>
-                        </li>
-                    `;
+            let years = await fsp.readdir(`archive/${dir}`);
+            for (let year of years) {
+                const yearId = `${dirId}-${year.replace(/\s+/g, '-')}`;
+                html += `
+                    <li>
+                        <a style="width: 58%" onclick="toggleVisibility('${yearId}')">${year}</a>
+                    </li>
+                `;
+
+                html += `<ul id="${yearId}" class="file-list" style="display: none;">`;
+                let files = await fsp.readdir(`archive/${dir}/${year}`);
+                for (let file of files) {
+                    if (file.includes(".json")) {
+                        const fileName = file.split(".")[0];
+                        html += `
+                            <li>
+                                <a href="/archive/ui/${year}/${fileName}">${fileName}</a>
+                            </li>
+                        `;
+                    }
                 }
+                html += `</ul>`;
             }
+            
+
+            // let files = await fsp.readdir(`archive/${dir}`);
+            // for (let file of files) {
+            //     if (file.includes(".json")) {
+            //         const fileName = file.split(".")[0];
+            //         html += `
+            //             <li>
+            //                 <a href="/archive/ui/${fileName}">${fileName}</a>
+            //             </li>
+            //         `;
+            //     }
+            // }
             
             // Close the unordered list
             html += `</ul>`;
@@ -148,6 +176,7 @@ app.get(['/', '/ui'], async (req, res) => {
         <html lang="en">
         <head>
             <meta charset="UTF-8">
+            <link rel="manifest" href="/fetch/data/manifest.json">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="/menu-styles.css">
         </head>
@@ -178,11 +207,12 @@ app.get(['/', '/ui'], async (req, res) => {
 // /archive/events -> get events
 // /archive/<region>_<date> -> get region
 // /archive/<region>_<date>/classes -> get classes
-app.get('/archive/:a?/:b?/:c?', async (req, res) => {
+app.get('/archive/:year?/:a?/:b?/:c?', async (req, res) => {
     getEvents = false;
     event_key = ""
     ppax = false;
     rraw = false;
+    year = req.params.year;
     getClasses = false;
     cclass = undefined;
 
@@ -235,7 +265,7 @@ app.get('/archive/:a?/:b?/:c?', async (req, res) => {
             }
         }
 
-        let dir = "archive/" + event_key.split("_")[0];
+        let dir = "archive/" + event_key.split("_")[0] + "/" + year;
         if (getEvents) {
             arr = []
             let dirs = await fsp.readdir("archive");
@@ -886,12 +916,6 @@ async function archiveJson(name, region) {
     try {
         const response = await axios.get(region.url);
         const htmlContent = response.data;
-        const filepath = `archive/${name}/`;
-        fs.mkdir(filepath, { recursive: true }, (err) => {
-            if (err) {
-                console.error('Error creating directories:', err);
-            } 
-        });
 
         date = "fixme-" + getYesterdate();
         const regex = /Live Results - Generated:\s*\w+ (\d{2}-\d{2}-\d{4}) \d{2}:\d{2}:\d{2}/;
@@ -906,7 +930,15 @@ async function archiveJson(name, region) {
             const regex = /Sportity Event Password:\s*([A-Za-z0-9]+)/;
             match = htmlContent.match(regex);
             date = match ? match[1] : date;
+            year = date.slice(-2);
         }
+
+        const filepath = `archive/${name}/${year}/`;
+        fs.mkdir(filepath, { recursive: true }, (err) => {
+            if (err) {
+                console.error('Error creating directories:', err);
+            } 
+        });
 
         const filename = filepath + `${name}_${date}.json`;
         let content = {};
