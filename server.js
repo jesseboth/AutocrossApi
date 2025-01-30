@@ -439,7 +439,6 @@ async function axware(region_name, region, cclass, widget = false) {
         const targetElement = liveElements.eq(region.data.offset);
         const parse = targetElement.find('tr.rowlow, tr.rowhigh, th');
 
-
         const format = region.format;
 
         results = {};
@@ -912,6 +911,7 @@ function getYesterdate() {
 //     }
 // }
 
+archiveJson("FLR", regions["FLR"]);
 async function archiveJson(name, region) {
     try {
         const response = await axios.get(region.url);
@@ -920,20 +920,23 @@ async function archiveJson(name, region) {
         date = "fixme-" + getYesterdate();
         const regex = /Live Results - Generated:\s*\w+ (\d{2}-\d{2}-\d{4}) \d{2}:\d{2}:\d{2}/;
         match = htmlContent.match(regex);
+        let yeardir = ""
 
         if (match) {
             const [month, day, year] = match[1].split('-');
             const formattedYear = year.slice(2);
             date = `${month}-${day}-${formattedYear}`;
+            yeardir = formattedYear;
         }
         else if (region.tour) {
             const regex = /Sportity Event Password:\s*([A-Za-z0-9]+)/;
             match = htmlContent.match(regex);
             date = match ? match[1] : date;
             year = date.slice(-2);
+            yeardir = year;
         }
 
-        const filepath = `archive/${name}/${year}/`;
+        const filepath = `archive/${name}/${yeardir}/`;
         fs.mkdir(filepath, { recursive: true }, (err) => {
             if (err) {
                 console.error('Error creating directories:', err);

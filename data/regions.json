@@ -1,6 +1,6 @@
 {
   "FLR": {
-      "url": "https://live.flr-scca.com/",
+      "url": "https://live.flr-scca.com/index.html",
       "software": "axware",
       "archive": true,
       "format": [
@@ -20,7 +20,7 @@
 
   },
   "WNY": {
-    "url": "https://live.wny-scca.com/",
+    "url": "https://www.wny-scca.com/live/",
     "software": "axware",
     "archive": true,
     "format": [
