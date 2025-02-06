@@ -553,6 +553,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                 }
                 else if (temp.driver == user_driver) {
                     // put me in 10th if I am outisde top 10
+                    temp.offset = temp.pax - results[temp.class]["9"].pax;
                     results[temp.class]["10"] = { ...temp }
                 }
                 if (widget && temp.class == cclass) {
@@ -843,6 +844,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                     }
                     else if (temp.driver == user_driver) {
                         // put me in 10th if I am outisde top 10
+                        temp.offset = temp.pax - results[temp.class]["9"].pax;
                         results[temp.class]["10"] = { ...temp }
                         results[temp.class]["10"].class = store;
                     }
@@ -1162,6 +1164,7 @@ function pax(results, widget, stats, user_driver = undefined) {
                 ret[(i + 1).toString()] = flattenedData[i];
             }
             else if (flattenedData[i].driver == user_driver) {
+                flattenedData[i].offset = flattenedData[i].pax - ret["9"].pax;
                 ret["10"] = flattenedData[i];
             }
 
@@ -1248,6 +1251,7 @@ function raw(results, widget, stats, user_driver = undefined) {
                 ret[(i + 1).toString()] = flattenedData[i];
             }
             else if (flattenedData[i].driver == user_driver) {
+                flattenedData[i].offset = flattenedData[i].pax - ret["9"].pax;
                 ret["10"] = flattenedData[i];
             }
 
