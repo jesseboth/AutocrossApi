@@ -6,6 +6,8 @@ SCRIPT_DIR=$(realpath $(dirname "$0"))
 VOLUMES="-v ${SCRIPT_DIR}/archive:/usr/src/app/archive \
 "
 
+DEBUG=false
+
 function help() {
     echo "Autocross API Docker container:"
     echo ""
@@ -26,7 +28,13 @@ function print() {
 
 function run() {
     # Start the long-running command in the background
-    eval "$@" > /dev/null 2>&1 &
+
+    if [ $DEBUG == true ]; then
+        echo ""
+        eval "$@"
+    else
+        eval "$@" > /dev/null 2>&1 &
+    fi
     cmd_pid=$!
 
     printf "\033[38;5;27m"
@@ -82,6 +90,10 @@ while [[ $# -gt 0 ]]; do
         -p|--port)
             PORT=$2
             shift
+            shift
+        ;;
+        --debug)
+            DEBUG=true
             shift
         ;;
         *)

@@ -27,8 +27,6 @@ const getJsonData = (filePath) => {
     }
 };
 const regions = getJsonData('data/regions.json');
-const settings = getJsonData('data/settings.json');
-const user_driver = settings.user;
 
 paxIndex = {}
 fetchPaxIndex().then(classIndexDict => {
@@ -320,6 +318,8 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
     let tourType = "";
     let region = "";
     let cclass = "";
+    const uuid = req.headers['x-device-id'];
+    const userDriver = req.headers['user'];
 
     try {
         switch (req.params.a.toUpperCase()) {
@@ -376,12 +376,17 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             const { _url, _region } = await getRedirect(regions[tourType].url, undefined);
             region = _region;
         }
-        
+
         if (!tour && (ui && !region)) {
             res.redirect('/');
             return;
         }
-        
+
+        if(region == "REGIONS"){
+            res.json(Object.keys(regions));
+            return;
+        }
+    
         if (!tour && !regions.hasOwnProperty(region)) {
             res.status(500).send(errorCode("Region not found", widget));
             return;
@@ -404,11 +409,21 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         ppax = cclass != undefined ? true : false;
         toggle = cclass != undefined && cclass != "PAX" ? false : true;
         if (region_dict.software == "axware") {
-            data = await axware(region, region_dict, cclass, widget)
+            data = await axware(region, region_dict, cclass, widget, userDriver, uuid)
+
+            if(widget && cclass != "CLASSES"){
+                incUpdates();
+                data["updates"] = updates;
+            }
+
             res.json(data);
         }
         else if (region_dict.software == "pronto") {
-            data = await pronto(region, region_dict, cclass, widget)
+            data = await pronto(region, region_dict, cclass, widget, userDriver, uuid)
+            if(widget && cclass != "CLASSES"){
+                incUpdates();
+                data["updates"] = updates;
+            }
             res.json(data);
         }
         else {
@@ -425,12 +440,21 @@ app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 
-async function axware(region_name, region, cclass, widget = false) {
+async function axware(region_name, region, cclass, widget = false, user_driver = undefined, uuid = undefined) {
     const url = region.url;
-    if (!event_stats.hasOwnProperty(region_name)) {
-        event_stats[region_name] = {};
+
+    let stats = {}
+    if(widget){
+        if(uuid == undefined){
+            uuid = "default";
+        }
+
+        if (!event_stats.hasOwnProperty(uuid+region_name+cclass)) {
+            event_stats[uuid+region_name+cclass] = {};
+        }
+
+        stats = event_stats[uuid+region_name+cclass];
     }
-    let stats = event_stats[region_name];
 
     try {
         const { data } = await axios.get(url);
@@ -507,24 +531,8 @@ async function axware(region_name, region, cclass, widget = false) {
 
                 temp.position = temp.position.split("T")[0];
                 intPosition = parseInt(temp.position)
-                if (widget) {
-                    if (stats.hasOwnProperty(temp.driver)) {
-                        if (intPosition < stats[temp.driver].position) {
-                            temp.color = color_upPos;
-                        }
-                        else if (intPosition > stats[temp.driver].position) {
-                            temp.color = color_downPos;
-                        }
-                        else if (temp.times.length > stats[temp.driver].runs) {
-                            temp.color = color_newTime;
-                        }
-                        else {
-                            temp.color = color_none;
-                        }
-                    }
-                    else {
-                        temp.color = color_none;
-                    }
+                if (widget && temp.class == cclass) {
+                    temp.color = getColor(intPosition, stats, temp.driver, temp.times.length);
                 }
 
                 runs = temp.times.length;
@@ -547,7 +555,7 @@ async function axware(region_name, region, cclass, widget = false) {
                     // put me in 10th if I am outisde top 10
                     results[temp.class]["10"] = { ...temp }
                 }
-                if (widget) {
+                if (widget && temp.class == cclass) {
                     stats[temp.driver] = { "position": intPosition, "runs": runs }
                 }
                 temp = {}
@@ -555,16 +563,16 @@ async function axware(region_name, region, cclass, widget = false) {
             else {
                 valid = true;
             }
-
+            
         };
 
         if (cclass != undefined) {
             if (cclass == "PAX") {
-                return pax(results, widget);
+                return pax(results, widget, stats, user_driver);
             }
             else if (cclass == "RAW") {
                 if(widget){
-                    return pax(results, widget);
+                    return pax(results, widget, stats, user_driver);
                 }
                 else {
                     return raw(results, widget);
@@ -581,6 +589,10 @@ async function axware(region_name, region, cclass, widget = false) {
             }
             else if (cclass == "CLASSES") {
                 ret = []
+                if(widget){
+                    ret.push("PAX");
+                    ret.push("RAW");
+                }
                 for (const key in results) {
                     ret.push(key);
                 }
@@ -599,7 +611,7 @@ async function axware(region_name, region, cclass, widget = false) {
     }
 }
 
-async function pronto(region_name, region, cclass, widget = false) {
+async function pronto(region_name, region, cclass, widget = false, user_driver = undefined, uuid = undefined) {
     let classes = [cclass];
     let backup = [];
     let doPax = false;
@@ -622,10 +634,18 @@ async function pronto(region_name, region, cclass, widget = false) {
         return await getProntoClasses(region.url, class_offset);
     }
 
-    if (!event_stats.hasOwnProperty(region_name)) {
-        event_stats[region_name] = {};
+    let stats = {}
+    if(widget){
+        if(uuid == undefined){
+            uuid = "default";
+        }
+
+        if (!event_stats.hasOwnProperty(uuid+region_name+cclass)) {
+            event_stats[uuid+region_name+cclass] = {};
+        }
+
+        stats = event_stats[uuid+region_name+cclass];
     }
-    let stats = event_stats[region_name];
 
     try {
         // loop through all classes
@@ -752,6 +772,7 @@ async function pronto(region_name, region, cclass, widget = false) {
 
                     intPosition = parseInt(temp.position)
                     if (widget) {
+                        temp.color = getColor(intPosition, stats, temp.driver, temp.times.length);
                         if (stats.hasOwnProperty(temp.driver)) {
                             if (intPosition < stats[temp.driver].position) {
                                 temp.color = color_upPos;
@@ -856,7 +877,7 @@ async function pronto(region_name, region, cclass, widget = false) {
             }
 
             if (doPax || doRaw) {
-                return pax(results, widget);
+                return pax(results, widget, stats, user_driver);
             }
 
             return results
@@ -911,7 +932,6 @@ function getYesterdate() {
 //     }
 // }
 
-archiveJson("FLR", regions["FLR"]);
 async function archiveJson(name, region) {
     try {
         const response = await axios.get(region.url);
@@ -1086,9 +1106,7 @@ function findBestTimeIndex(times) {
 }
 
 function reset_stats() {
-    for (const key in Object.keys(event_stats)) {
-        event_stats[key] = {};
-    }
+    event_stats = {};
 }
 
 // Function to add a name if it doesn't already exist
@@ -1106,7 +1124,7 @@ function flatten(results) {
     Object.keys(results).forEach(cclass => {
         Object.keys(results[cclass]).forEach(entryId => {
             const entryData = results[cclass][entryId];
-            if (typeof entryData === 'object' && entryData !== null) {
+            if (typeof entryData === 'object' && entryData !== null && entryData.driver.trim() !== "") {
                 flattenedData.push(entryData);
             }
         });
@@ -1115,7 +1133,7 @@ function flatten(results) {
     return flattenedData;
 }
 
-function pax(results, widget) {
+function pax(results, widget, stats, user_driver = undefined) {
     ret = {}
 
     const flattenedData = flatten(results)
@@ -1136,11 +1154,18 @@ function pax(results, widget) {
         }
 
         if (widget) {
+            const runs = flattenedData[i].times.split("   ").filter(item => item.trim() !== "").length;
+            flattenedData[i].color = getColor(i+1, stats, flattenedData[i].driver, runs);
+            stats[flattenedData[i].driver] = { "position": i + 1, "runs": runs }
+
             if (i < 10) {
                 ret[(i + 1).toString()] = flattenedData[i];
             }
             else if (flattenedData[i].driver == user_driver) {
                 ret["10"] = flattenedData[i];
+            }
+
+            if(i >= 25-1){
                 break;
             }
         }
@@ -1194,7 +1219,7 @@ function paxSort(data) {
     });
 }
 
-function raw(results, widget) {
+function raw(results, widget, stats, user_driver = undefined) {
     ret = {}
 
     const flattenedData = flatten(results)
@@ -1215,14 +1240,22 @@ function raw(results, widget) {
         }
 
         if (widget) {
+            const runs = flattenedData[i].times.split("   ").filter(item => item.trim() !== "").length;
+            flattenedData[i].color = getColor(i+1, stats, flattenedData[i].driver, runs);
+            stats[flattenedData[i].driver] = { "position": i + 1, "runs": runs }
+
             if (i < 10) {
                 ret[(i + 1).toString()] = flattenedData[i];
             }
             else if (flattenedData[i].driver == user_driver) {
                 ret["10"] = flattenedData[i];
+            }
+
+            if(i >= 25-1){
                 break;
             }
         }
+
     }
     return widget ? ret : flattenedData;
 }
@@ -1304,6 +1337,8 @@ async function getProntoClasses(url, offset) {
 
         // Initialize an array to store the extracted links without '.php'
         const linksArray = [];
+        linksArray.push("PAX");
+        linksArray.push("RAW");
 
         // Select all <a> elements within the targeted table
         targetElement.find('a').each((index, element) => {
@@ -1424,4 +1459,36 @@ async function fetchPaxIndex() {
     } catch (error) {
         console.error('Error fetching or parsing the table:', error);
     }
+}
+
+function incUpdates() {
+    updates += 1;
+    if (updates > 1000) {
+        updates = 0;
+    }
+    return updates;
+}
+
+function getColor(position, stats, driver, runs){
+    if (stats.hasOwnProperty(driver)) {
+        if (position < stats[driver].position) {
+            color = color_upPos;
+        }
+        else if (position > stats[driver].position) {
+            color = color_downPos;
+        }
+        else if (runs > stats[driver].runs) {
+            temp.color = color_newTime;
+        }
+        else {
+            color = color_none;
+        }
+    }
+    else if(runs > 1 && Object.keys(stats).length >= position){
+        color = color_upPos;
+    }
+    else {
+        color = color_none;
+    }
+    return color;
 }
