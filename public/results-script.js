@@ -1,4 +1,3 @@
-
 // TODO maybe get from server?
 tourEvents = ["TOUR", "PRO"]
 tourNames = {
@@ -28,6 +27,16 @@ document.addEventListener("DOMContentLoaded", function () {
     region = regionData.region;
     tour = regionData.isTour;
     cclass = getClass(region);
+
+    if(tour){
+        document.getElementById("formContainer").style.display = "block";
+        if(!tourEvents.includes(region)){
+            document.getElementById("inputBox").placeholder = region.split("/")[1];
+        }
+    }
+    else {
+        document.getElementById("formContainer").style.display = "none";
+    }
 
     document.title = `${regionData.regionName} Results`
     document.getElementById("region-header").innerHTML = `${regionData.regionName} Results`
@@ -67,6 +76,28 @@ document.addEventListener("DOMContentLoaded", function () {
     }).catch(error => {
         console.error('Error fetching classes:', error); // Handle any errors from `getClasses`
     });
+});
+
+document.getElementById('eventForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    var inputValue = document.getElementById('inputBox').value;
+
+    path = getPath();
+    if (tourEvents.includes(region)){
+        path[2] = inputValue;
+    } else {
+        path[2] = inputValue;
+
+    }
+    
+    for (let i = 3; i < path.length; i++) {
+        path[i] = "";
+    }
+    const url = new URL(window.location.href);
+    url.pathname = path.join('/');
+    url.hash = '';
+
+    window.location.replace(url.toString());
 });
 
 function toggleURL(add = "pax") {
@@ -295,6 +326,11 @@ function findBestTimeIndex(times) {
 
 function generateTableRows(entries) {
     let rows = '';  // Initialize an empty string to hold the table rows
+
+    if(!entries || !Array.isArray(entries) || (entries.status && entries.status == 404)) {
+        return
+    }
+
     entries.forEach((entry, index) => {
         const rowClass = index % 2 === 0 ? 'rowlow' : 'rowhigh';
 
@@ -358,6 +394,10 @@ function generateClassTable(cclass = undefined) {
 }
 
 async function generateResultsTable(jsonData, cclass = undefined) {
+    if (!jsonData || jsonData.status == 404 || jsonData.length == 0) {
+        return;
+    }
+
     let htmlContent = '';  // Initialize the HTML content string
     if (cclass !== undefined) {
         htmlContent += `

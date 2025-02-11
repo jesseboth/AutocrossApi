@@ -35,7 +35,7 @@ th {
 }
 
 table {
-  width: 100%;
+  width: 102%;
   border-collapse: collapse;
 }
 
@@ -111,4 +111,23 @@ a {
 .staggered-button:hover,
 .toggle-button:hover {
   background-color: #0056b3;
+}
+
+#formContainer {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  padding: 10px;
+  background-color: white;
+  z-index: 1000;
+}
+
+.submit-button {
+  background-color: #007bff;
+  color: white;
+  padding: 6px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
 }

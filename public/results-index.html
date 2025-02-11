@@ -4,10 +4,17 @@
 <head>
   <title>...</title>
   <link rel="stylesheet" href="/results-styles.css">
-  <script src="/results-script.js"></script>
 </head>
 
 <body style="display: none;">
+  <div id="formContainer">
+    <form id="eventForm">
+        <label for="inputBox">Event Code:</label>
+        <input type="text" id="inputBox" name="inputBox">
+        <button type="submit" class="submit-button">&#10148;</button>
+    </form>
+  </div>
+
   <button class="toggle-button" id="toggle-pax" onClick="toggleURL()" style="display: block">PAX</button>
   <button class="toggle-button" id="toggle-raw" onClick="toggleURL('raw')" style="display: block">Raw</button>
   <h2 id="header">... Results</h2>
@@ -35,4 +42,5 @@
   </table>
 </body>
 
+<script src="/results-script.js"></script>
 </html>
