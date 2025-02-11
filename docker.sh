@@ -5,6 +5,8 @@ PORT="8001"
 SCRIPT_DIR=$(realpath $(dirname "$0"))
 VOLUMES="-v ${SCRIPT_DIR}/archive:/usr/src/app/archive \
 "
+NETWORK=""
+DEPLOY=""
 
 DEBUG=false
 
@@ -92,6 +94,14 @@ while [[ $# -gt 0 ]]; do
             shift
             shift
         ;;
+        --network)
+            NETWORK="$NETWORK --network $2"
+            if [ $2 == "host" ]; then
+                DEPLOY="deploy"
+            fi
+            shift
+            shift
+        ;;
         --debug)
             DEBUG=true
             shift
@@ -116,10 +126,10 @@ fi
 
 if [ $DAEMON == TRUE ]; then
     print "Starting daemon container"
-    run docker run -d $VOLUMES -p $PORT:8000 --restart always --name "$CONTAINERNAME" "$IMAGENAME"
+    run docker run -d $VOLUMES -p $PORT:8000 "$NETWORK" --restart always --name "$CONTAINERNAME" "$IMAGENAME" $DEPLOY
 elif [ $BUILD = TRUE ]; then
     print "Starting container"
-    run docker run -d $VOLUMES -p $PORT:8000 --name "$CONTAINERNAME" "$IMAGENAME"
+    run docker run -d $VOLUMES -p $PORT:8000 --name "$CONTAINERNAME" "$IMAGENAME" "$NETWORK" $DEPLOY
 fi
 
 if [ $LOG == TRUE ]; then

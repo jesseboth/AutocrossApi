@@ -9,7 +9,7 @@ const { get } = require('http');
 const { dir } = require('console');
 
 const app = express();
-const PORT = 8000;
+const PORT = process.env.PORT || 8000;
 
 // Middleware for redirection
 app.use((req, res, next) => {
@@ -1066,6 +1066,7 @@ function beautifyTimes(times, bestIdx, widget) {
         retval = times.join('   ').trim();
     }
     if (retval == "") { retval = " " }
+
     return retval;
 }
 

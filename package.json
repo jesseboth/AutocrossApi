@@ -4,8 +4,8 @@
   "description": "Autocross Widget",
   "main": "server.js",
   "scripts": {
-    "start": "node server",
-    "dev": "nodemon server"
+    "start": "node server.js",
+    "deploy": "PORT=8001 node server.js"
   },
   "author": "Jesse Both",
   "license": "ISC",
