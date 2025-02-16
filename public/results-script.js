@@ -6,7 +6,8 @@ tourNames = {
 }
 const tourClasses = {
     "Street": ["SS", "AS", "BS", "CS", "DS", "ES", "FS", "GS", "HS"],
-    "Street Touring": ["STH", "STS", "STX", "STU", "STR", "SST", "SSC", "EVX"],
+    "Street Touring (old)": ["STH", "STS", "STX", "STU", "STR"],
+    "Street Touring": ["GST", "DST", "CST", "BST", "AST", "SST", "SSC", "EVX"],
     "Street Prep": ["SSP", "CSP", "DSP", "ESP", "FSP", "LS"],
     "Index": ["S1", "S3", "S4", "S5"],
     "Spec": ["XP", "CP", "DP", "EP", "FP", "CSM"],
@@ -50,6 +51,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     getClasses(region).then(classes => {
         if (!cclass && !classesOnly(classes)) {
+            classes.unshift("PAX");
+            classes.unshift("RAW");
+            classes = classes.filter(ccclass => ccclass !== "PAX" && ccclass !== "RAW");
             for (let i = 0; i < classes.length; i++) {
                 generateClassTable(classes[i]);
                 getResults(classes[i]).then(res => {
