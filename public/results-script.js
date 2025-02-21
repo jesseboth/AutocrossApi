@@ -50,7 +50,7 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById('results').innerHTML = "";  // Clear the results table
 
     getClasses(region).then(classes => {
-        if (!cclass && !classesOnly(classes)) {
+        if (!cclass && !classesOnly(classes, tour)) {
             classes.unshift("PAX");
             classes.unshift("RAW");
             classes = classes.filter(ccclass => ccclass !== "PAX" && ccclass !== "RAW");
@@ -210,7 +210,11 @@ async function getClasses(region) {
     return await getData(`/${region}/classes`);
 }
 
-function classesOnly(classes) {
+function classesOnly(classes, tour = false) {
+    if(tour) {
+        return true;
+    }
+
     return classes.length >= 15 ? true : false
 }
 

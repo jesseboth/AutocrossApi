@@ -10,6 +10,13 @@ const { dir } = require('console');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
+const DEBUG = process.env.DEBUG || false;
+
+function debug(...args) {
+    if (DEBUG) {
+        console.log(...args);
+    }
+}
 
 // Middleware for redirection
 app.use((req, res, next) => {
@@ -632,7 +639,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
     }
 
     if (cclass == "CLASSES") {
-        return await getProntoClasses(region.url, class_offset);
+        return await getProntoClasses(region.url, class_offset, true);
     }
 
     let stats = {}
@@ -651,9 +658,14 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
     try {
         // loop through all classes
         let results = {};
+        if(region.tour && classes.length > 1){
+            return errorCode("Please select a specific class", widget);
+        }
+
         for (let idx = 0; idx < classes.length; idx++) {
             let url = "";
             let currentClass = classes[idx];
+            debug("Current Class: ", currentClass)
 
             if (currentClass == "PAX") {
                 if (await checkUrlExists(region.url + "PaxIndexOverall.html")) {
@@ -922,23 +934,11 @@ function getYesterdate() {
     return `${month}-${day}-${year}`;
 }
 
-// async function covertotoJson() {
-//     let files = await fsp.readdir("archiveOther");
-//     for (let file of files) {
-//         if(file.includes(".html")){
-//             rname = file.split("_")[0];
-//             region = {...regions[rname]};
-//             region.url = "http://192.168.4.199:8000/archiveOther/" + file;
-//             await archiveJson(rname, region);
-//         }
-//     }
-// }
-
 async function archiveJson(name, region) {
     try {
         const response = await axios.get(region.url);
         const htmlContent = response.data;
-
+        
         date = "fixme-" + getYesterdate();
         const regex = /Live Results - Generated:\s*\w+ (\d{2}-\d{2}-\d{4}) \d{2}:\d{2}:\d{2}/;
         match = htmlContent.match(regex);
@@ -954,9 +954,11 @@ async function archiveJson(name, region) {
             const regex = /Sportity Event Password:\s*([A-Za-z0-9]+)/;
             match = htmlContent.match(regex);
             date = match ? match[1] : date;
-            year = date.slice(-2);
+            year = date.slice(0, 2);
             yeardir = year;
+
         }
+        console.log(year, date)
 
         const filepath = `archive/${name}/${yeardir}/`;
         fs.mkdir(filepath, { recursive: true }, (err) => {
@@ -1326,7 +1328,7 @@ async function checkUrlExists(url) {
     }
 }
 
-async function getProntoClasses(url, offset) {
+async function getProntoClasses(url, offset, only=false) {
     try {
         // Fetch the HTML from the URL
         const { data: html } = await axios.get(url);
@@ -1342,16 +1344,23 @@ async function getProntoClasses(url, offset) {
 
         // Initialize an array to store the extracted links without '.php'
         const linksArray = [];
-        linksArray.push("PAX");
-        linksArray.push("RAW");
+
+        if(only){
+            linksArray.push("PAX");
+            linksArray.push("RAW");
+        }
 
         // Select all <a> elements within the targeted table
         targetElement.find('a').each((index, element) => {
             let link = $(element).attr('href');
             if (link) {
-                // Remove the '.php' extension if it exists
-                link = link.replace('.php', '');
-                linksArray.push(link);
+
+                // only push if its a class
+                if(link.split("/").length == 1){
+                    // Remove the '.php' extension if it exists
+                    link = link.replace('.php', '');
+                    linksArray.push(link);
+                }
             }
         });
 

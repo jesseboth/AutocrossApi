@@ -45,7 +45,7 @@
   "TOUR": {
     "url": "https://sololive.scca.com/",
     "software": "pronto",
-    "archive": true,
+    "archive": false,
     "tour": true,
     "format": [
         [null, "position", "number", "driver", "car", null],
@@ -58,7 +58,7 @@
   "PRO": {
     "url": "https://sololive.scca.com/",
     "software": "pronto",
-    "archive": true,
+    "archive": false,
     "tour": true,
     "format": [
         [null, "position", "number", "driver", "car", null],
