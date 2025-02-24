@@ -767,7 +767,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                             index++;
                         }
                     }
-                    else {
+                    else if(columns.length <= 1) {
                         valid = false;
                         break;
                     }
