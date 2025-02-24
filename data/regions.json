@@ -48,9 +48,8 @@
     "archive": false,
     "tour": true,
     "format": [
-        [null, "position", "number", "driver", "car", null],
-        [null, null, null, "t",  "t", "t", null, "pax"],
-        [null, null, null, "t", "t", "t", null, "offset"]
+        [null, "position", "number", "driver", "car", null, "pax"],
+        [null, null, "t", "t", "t", "t",  "t", "t", "offset"]
     ],
     "data": { "element":"table", "offset": 1, "nats_offset": 1, "classes_offset": 3 },
     "pax": [["position", "index", null, "number", "driver", "car", "pax"]]

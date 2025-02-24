@@ -7,6 +7,7 @@ const fsp = require('fs').promises;
 const path = require('path');
 const { get } = require('http');
 const { dir } = require('console');
+const { exec } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -662,6 +663,8 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
             return errorCode("Please select a specific class", widget);
         }
 
+        carIdx = [0, region.format[0].indexOf("car")];
+
         for (let idx = 0; idx < classes.length; idx++) {
             let url = "";
             let currentClass = classes[idx];
@@ -731,9 +734,15 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         }
                     }
                     let columns = $(parse[index]).find('td');
-
-
-                    if (columns.length > 1) {
+                    
+                    let execute = true;
+                    if (row != carIdx[0]) {
+                        // Check if the row contains a car - if it does there are not yet times listed
+                        execute = !isCar($(columns[carIdx[1]]).text().trim());
+                        debug("Car: ", $(columns[carIdx[1]]).text().trim(), execute)
+                    }
+                    
+                    if (columns.length > 1 && execute) {
                         for (col = 0; col < columns.length; col++) {
                             element = format[row][col];
                             if (element == null) {
@@ -958,7 +967,6 @@ async function archiveJson(name, region) {
             yeardir = year;
 
         }
-        console.log(year, date)
 
         const filepath = `archive/${name}/${yeardir}/`;
         fs.mkdir(filepath, { recursive: true }, (err) => {
@@ -1473,6 +1481,11 @@ async function fetchPaxIndex() {
     } catch (error) {
         console.error('Error fetching or parsing the table:', error);
     }
+}
+
+function isCar(str) {
+    const regex = /^\d{4}\s+.+/;
+    return regex.test(str);
 }
 
 function incUpdates() {
