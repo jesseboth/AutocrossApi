@@ -357,6 +357,10 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         if ((widget && tour) || (ui && tour)) {
             region = req.params.c != undefined ? req.params.c.toUpperCase() : undefined;
             cclass = req.params.d != undefined ? req.params.d.toUpperCase() : undefined;
+            if(region == "CLASSES"){
+                cclass = region;
+                region = undefined;
+            }
         }
         else if(tour){
             region = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
