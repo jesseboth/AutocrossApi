@@ -2,6 +2,9 @@
 
 Welcome to the Autocross API. This API provides access to real-time and archived data for autocross events. You can retrieve data based on regions, classes, or PAX (Performance Adjusted Index). Additionally, data for specific events can be accessed through the archive endpoints.
 
+### Widget
+There is a KWGT widget and tasker task that should be installed onto and an android device. The intention is to use [Widgets For Android Auto](https://github.com/ns130291/widgets-for-auto/releases) so that a the autocross timing table can be displayed on the car screen. 
+
 ## Setup
 
 To get started with the Autocross API, follow these setup instructions:
@@ -18,6 +21,15 @@ Use the `docker.sh` script to manage the Docker container for the API. This scri
 ./docker.sh log     # Output the logs
 ```
 
+### 2. Setup Android Device
+- Install KWGT and import Widget/Autocross.kwgt
+- Install Tasker and import Widget/Autocross_Data.tsk.xml
+- Install [Widgets For Android Auto](https://github.com/ns130291/widgets-for-auto/releases)
+- In Widgets for Android Autom select add widget and select kwgt
+- In Tasker, export Autocross Data as an app
+- Modiy Tasker to point to your Autocross API server
+
+
 ### 2. Adding New Regions
 
 To add a new region to the API:
@@ -25,21 +37,6 @@ To add a new region to the API:
 - Follow the existing structure for adding regions.
 - Ensure that the **region keys** are specified in **all uppercase** (e.g., `CNY`, `FLR`).
 - Update the necessary configuration files to include the new region.
-
-### 3. Configuring Widget Mode
-
-The API can operate in a widget mode, providing data formatted for widgets such as KWGT or Tasker. 
-
-- To enable or disable widget mode, modify the `settings.json` file located in the project root.
-- Set the appropriate configuration flags in `settings.json` to enable or disable widget functionality as needed.
-
-Ensure that the settings in `settings.json` align with your requirements before starting the server.
-
-## Base URL
-
-```
-http://<your-server-address>
-```
 
 ## API Endpoints
 
