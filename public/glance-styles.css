@@ -1,0 +1,371 @@
+body {
+  margin: 0;
+  padding: 0;
+  width: 98vw;
+  max-width: 100%;
+  font-family: Arial, sans-serif;
+  background-color: #000;
+  color: #fff;
+}
+
+.rowhigh {
+  background-color: #e6e6e8;
+}
+
+.rowlow {
+  background-color: #FFFFFF;
+}
+
+h1, h2, h3 {
+  text-align: center;
+  font-family: Arial;
+  color: #0000FF;
+  margin: 5px 0;
+}
+
+#header {
+  font-size: 20px;
+  margin-top: 50px;
+  margin-bottom: 0;
+}
+
+#updated {
+  text-align: center;
+  margin-top: 0;
+  margin-bottom: 5px;
+  color: #888;
+  font-size: 14px;
+}
+
+th {
+  color: #FFFFFF;
+  background-color: #152bed;
+}
+
+table {
+  width: 80%;
+  border-collapse: collapse;
+  margin: 0 auto;
+}
+
+th, td {
+  padding: 8px;
+  text-align: center;
+  min-width: 5px;
+}
+
+/* Class selection button */
+.class-select-button {
+  position: absolute;
+  top: 10px;
+  right: 1.5%;
+  padding: 10px 20px;
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 5px;
+  z-index: 100;
+}
+
+.class-select-button:hover {
+  background-color: #0056b3;
+}
+
+/* Modal styles */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.modal-content {
+  background-color: #222;
+  margin: 10% auto;
+  padding: 20px;
+  border: 1px solid #152bed;
+  border-radius: 8px;
+  width: 80%;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.close-button {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.close-button:hover {
+  color: white;
+}
+
+.modal-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.modal-button {
+  padding: 8px 15px;
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  border-radius: 4px;
+}
+
+.modal-button:hover {
+  background-color: #0056b3;
+}
+
+.modal-button-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.button-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+#button-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  padding: 10px;
+}
+
+.staggered-button {
+  padding: 5px 15px;
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  height: 35px;
+  transition: background-color 0.3s ease;
+}
+
+.staggered-button:hover,
+.toggle-button:hover {
+  background-color: #0056b3;
+}
+
+#formContainer {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  padding: 10px;
+  background-color: transparent;
+  z-index: 1000;
+}
+
+.submit-button {
+  background-color: #007bff;
+  color: white;
+  padding: 6px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* Top 10 Specific Styles */
+.top10-container {
+  display: flex;
+  justify-content: space-between;
+  width: 98%;
+  max-width: 1800px;
+  margin: 10px auto;
+  gap: 10px;
+}
+
+.column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.result-box {
+  border: 2px solid #152bed;
+  border-radius: 5px;
+  overflow: hidden;
+  background-color: #111;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.result-header {
+  display: flex;
+  background-color: #152bed;
+  color: white;
+  padding: 8px 5px;
+  align-items: center;
+}
+
+.position-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 40px;
+  margin-right: 5px;
+}
+
+.position {
+  font-size: 36px;
+  font-weight: bold;
+  text-align: center;
+  color: #ffcc00;
+  line-height: 1;
+}
+
+.class-year {
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+  line-height: 1;
+}
+
+.car-number {
+  font-size: 28px;
+  font-weight: bold;
+  color: #54ccff;
+  width: 60px;
+  text-align: center;
+}
+
+.driver-info {
+  flex-grow: 1;
+  padding: 0 10px;
+}
+
+.driver-name {
+  font-size: 24px;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #ffffff;
+}
+
+.car-info {
+  font-size: 16px;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.time-info {
+  text-align: right;
+  padding: 0 10px;
+  min-width: 100px;
+}
+
+.main-time {
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.time-diff {
+  font-size: 16px;
+  color: #888;
+  text-align: right;
+}
+
+.result-body {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px;
+  background-color: #111;
+}
+
+.run-times {
+  font-size: 12px;
+  color: #666;
+  padding: 0 5px;
+  text-align: left;
+  width: 100%;
+}
+
+/* Class indicators */
+.ds {
+  background-color: #333;
+}
+
+.gs {
+  background-color: #444;
+}
+
+.bs {
+  background-color: #555;
+}
+
+.sm {
+  background-color: #666;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .top10-container {
+    flex-direction: column;
+  }
+  
+  .column {
+    width: 100%;
+  }
+}
+
+/* Color indicators for position changes */
+.up {
+  color: #4fb342;
+}
+
+.down {
+  color: #d14545;
+}
+
+.new-time {
+  color: #1fb9d1;
+}
+
+/* Position change highlighting for result boxes */
+.result-box.up {
+  background-color: rgba(79, 179, 66, 0.2);
+  border: 2px solid #4fb342;
+}
+
+.result-box.down {
+  background-color: rgba(209, 69, 69, 0.2);
+  border: 2px solid #d14545;
+}
+
+input[type="text"] {
+  background-color: #333;
+  color: white;
+  border: 1px solid #555;
+  padding: 5px;
+  border-radius: 4px;
+}
+
+label {
+  color: white;
+}

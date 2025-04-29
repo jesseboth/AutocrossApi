@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autocross Glance</title>
+  <link rel="stylesheet" href="/glance-styles.css">
+</head>
+<body>
+  <div id="formContainer">
+    <form id="eventForm">
+      <label for="inputBox">Event Code:</label>
+      <input type="text" id="inputBox" name="inputBox">
+      <button type="submit" class="submit-button">&#10148;</button>
+    </form>
+  </div>
+
+  <!-- Class selection button -->
+  <button class="class-select-button" id="class-select-button">Change Class</button>
+  
+  <!-- Class selection modal -->
+  <div id="class-modal" class="modal">
+    <div class="modal-content">
+      <span class="close-button">&times;</span>
+      <h3>Select Class</h3>
+      <div class="modal-buttons">
+        <button class="modal-button" onclick="toggleURL('pax')">PAX</button>
+        <button class="modal-button" onclick="toggleURL('raw')">Raw</button>
+      </div>
+      <div id="modal-button-container">
+        <!-- Class Buttons will be inserted here -->
+      </div>
+    </div>
+  </div>
+  
+  <h2 id="header">Autocross Results</h2>
+  <div id="updated">Updated: ...</div>
+  
+  <div class="top10-container">
+    <div class="column left-column">
+      <!-- Positions 1-5 will be inserted here -->
+    </div>
+    <div class="column right-column">
+      <!-- Positions 6-10 will be inserted here -->
+    </div>
+  </div>
+
+  <script src="/glance-script.js"></script>
+</body>
+</html>

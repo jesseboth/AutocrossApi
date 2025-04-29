@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Region and Class Selector</title>
+  <style>
+    /* Provided Global Styles */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      background-color: #e6e6e8;
+    }
+    .container {
+      padding: 20px;
+    }
+    h1 {
+      margin: 0 0 20px 0;
+      font-size: 24px;
+      color: #333;
+      text-align: center;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: center;
+    }
+    a, button {
+      display: block;
+      width: 50%;
+      padding: 10px 15px;
+      background-color: #007BFF;
+      color: white;
+      text-decoration: none;
+      border-radius: 5px;
+      text-align: center;
+      margin: 10px auto;
+      border: none;
+      cursor: pointer;
+    }
+    a:hover, button:hover {
+      background-color: #0056b3;
+    }
+    /* Custom Styles for Dropdowns */
+    .dropdown-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    label {
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #333;
+    }
+    select {
+      width: 50%;
+      padding: 8px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Select Region and Class</h1>
+    <div class="dropdown-container">
+      <label for="region">Region:</label>
+      <select id="region">
+        <option value="">Select a region</option>
+      </select>
+    </div>
+    <div class="dropdown-container">
+      <label for="class">Class:</label>
+      <select id="class" disabled>
+        <option value="">Select a class</option>
+      </select>
+    </div>
+    <!-- Download Button -->
+    <button id="downloadButton" disabled>Download Information</button>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const regionSelect = document.getElementById("region");
+      const classSelect = document.getElementById("class");
+      const downloadButton = document.getElementById("downloadButton");
+
+      // Helper function to update the download button status
+      function updateDownloadButton() {
+        // Enable the download button only if both region and class are selected
+        downloadButton.disabled = !(regionSelect.value && classSelect.value);
+      }
+
+      // Fetch regions from the server
+      fetch("/regions")
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("Network response was not ok");
+          }
+          return response.json();
+        })
+        .then(regions => {
+          // Assuming 'regions' is an array of region names
+          regions.forEach(region => {
+            const option = document.createElement("option");
+            option.value = region;
+            option.textContent = region;
+            regionSelect.appendChild(option);
+          });
+        })
+        .catch(error => {
+          console.error("Error fetching regions:", error);
+        });
+
+      // Listen for changes on the region dropdown
+      regionSelect.addEventListener("change", function() {
+        const selectedRegion = regionSelect.value;
+        // Reset the class dropdown
+        classSelect.innerHTML = '<option value="">Select a class</option>';
+        classSelect.disabled = true;
+        updateDownloadButton();
+
+        if (selectedRegion) {
+          // Fetch classes for the selected region
+          fetch(`/${selectedRegion}/classes`)
+            .then(response => {
+              if (!response.ok) {
+                throw new Error("Network response was not ok");
+              }
+              return response.json();
+            })
+            .then(classes => {
+              // Assuming 'classes' is an array of class names
+              classes.forEach(cls => {
+                const option = document.createElement("option");
+                option.value = cls;
+                option.textContent = cls;
+                classSelect.appendChild(option);
+              });
+              classSelect.disabled = false;
+              updateDownloadButton();
+            })
+            .catch(error => {
+              console.error("Error fetching classes:", error);
+            });
+        }
+      });
+
+      // Listen for changes on the class dropdown
+      classSelect.addEventListener("change", updateDownloadButton);
+
+      // Function to write file using the File System Access API
+      async function saveFile(content) {
+        try {
+          const options = {
+            // Suggested name; instruct your users to select the existing file to overwrite it.
+            suggestedName: 'tasker_data.txt',
+            types: [{
+              description: 'Text Files',
+              accept: { 'text/plain': ['.txt'] }
+            }]
+          };
+          // This will prompt the user to pick a file location.
+          const handle = await window.showSaveFilePicker(options);
+          const writable = await handle.createWritable();
+          await writable.write(content);
+          await writable.close();
+          console.log("File saved successfully.");
+        } catch (err) {
+          console.error("Error saving file:", err);
+        }
+      }
+
+      // Download file when button is clicked
+      downloadButton.addEventListener("click", async function() {
+        // Gather the selected values
+        const selectedRegion = regionSelect.value;
+        const selectedClass = classSelect.value;
+        // Prepare the text file content
+        const content = `Region: ${selectedRegion}\nClass: ${selectedClass}`;
+
+        // If the File System Access API is available, use it:
+        if (window.showSaveFilePicker) {
+          await saveFile(content);
+        } else {
+          // Fallback method: create a download link
+          const blob = new Blob([content], { type: 'text/plain' });
+          const downloadLink = document.createElement("a");
+          downloadLink.download = "tasker_data.txt";
+          downloadLink.href = URL.createObjectURL(blob);
+          // Append to the body temporarily so the click works in Firefox
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+        }
+      });
+    });
+  </script>
+</body>
+</html>

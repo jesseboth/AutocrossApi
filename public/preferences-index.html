@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Autocross Preferences</title>
+  <link rel="stylesheet" href="/top10-styles.css">
+  <style>
+    .preferences-container {
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      background-color: #222;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    
+    select, input {
+      width: 100%;
+      padding: 10px;
+      background-color: #333;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    
+    .button-group {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 30px;
+    }
+    
+    button {
+      padding: 10px 20px;
+      background-color: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+    
+    button:hover {
+      background-color: #0056b3;
+    }
+    
+    .save-button {
+      background-color: #28a745;
+    }
+    
+    .save-button:hover {
+      background-color: #218838;
+    }
+    
+    .view-options {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+    
+    .view-options a {
+      flex: 1;
+      padding: 10px;
+      background-color: #152bed;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      text-align: center;
+      transition: background-color 0.3s;
+    }
+    
+    .view-options a:hover {
+      background-color: #0e1fa8;
+    }
+    
+    .status-message {
+      margin-top: 20px;
+      padding: 10px;
+      border-radius: 4px;
+      text-align: center;
+      display: none;
+    }
+    
+    .success {
+      background-color: rgba(40, 167, 69, 0.2);
+      color: #28a745;
+    }
+    
+    .error {
+      background-color: rgba(220, 53, 69, 0.2);
+      color: #dc3545;
+    }
+  </style>
+</head>
+<body>
+  <h2 id="header">Autocross Preferences</h2>
+  
+  <div class="preferences-container">
+    <div class="form-group">
+      <label for="region-select">Default Region:</label>
+      <select id="region-select">
+        <option value="">Select a region...</option>
+        <!-- Regions will be populated by JavaScript -->
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label for="class-select">Default Class:</label>
+      <select id="class-select">
+        <option value="">Select a class...</option>
+        <!-- Classes will be populated after region selection -->
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label for="view-select">Default View:</label>
+      <select id="view-select">
+        <option value="results">Standard Results</option>
+        <option value="top10">Top 10 View</option>
+      </select>
+    </div>
+    
+    <div class="button-group">
+      <button id="clear-button">Clear Preferences</button>
+      <button id="save-button" class="save-button">Save Preferences</button>
+    </div>
+    
+    <div id="status-message" class="status-message"></div>
+    
+    <div class="view-options">
+      <a href="/" id="home-link">Home</a>
+      <a href="#" id="results-link">View Results</a>
+    </div>
+  </div>
+  
+  <script src="/preferences-script.js"></script>
+</body>
+</html>

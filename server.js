@@ -65,13 +65,22 @@ cron.schedule('30 2 * * 0', () => {
 
 app.use(express.static('public')); // Serve static files from the public directory
 
-// Set up a route to serve the HTML file
+// Set up routes to serve the HTML files
 app.get('/ui/:b/:c?/:d?', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
 });
 
+app.get('/glance/:b/:c?/:d?', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'glance-index.html'));
+});
+
+
 app.get('/archive/ui/:b/:c?/:d?', async (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
+});
+
+app.get('/archive/glance/:b/:c?/:d?', async (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'glance-index.html'));
 });
 
 app.get('/fetch/:a/:b/:c?', async (req, res) => {
@@ -91,10 +100,119 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="/menu-styles.css">
             <script src="/menu-script.js"></script>
+            <style>
+                /* Toggle switch styles */
+                .view-toggle-container {
+                    position: absolute;
+                    top: 10px;
+                    right: 20px;
+                    display: flex;
+                    align-items: center;
+                    z-index: 100;
+                }
+                
+                .view-toggle-label {
+                    margin: 0 10px;
+                    color: white;
+                    font-weight: bold;
+                }
+                
+                .switch {
+                    position: relative;
+                    display: inline-block;
+                    width: 60px;
+                    height: 34px;
+                }
+                
+                .switch input {
+                    opacity: 0;
+                    width: 0;
+                    height: 0;
+                }
+                
+                .slider {
+                    position: absolute;
+                    cursor: pointer;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: #ccc;
+                    transition: .4s;
+                    border-radius: 34px;
+                }
+                
+                .slider:before {
+                    position: absolute;
+                    content: "";
+                    height: 26px;
+                    width: 26px;
+                    left: 4px;
+                    bottom: 4px;
+                    background-color: white;
+                    transition: .4s;
+                    border-radius: 50%;
+                }
+                
+                input:checked + .slider {
+                    background-color: #2196F3;
+                }
+                
+                input:focus + .slider {
+                    box-shadow: 0 0 1px #2196F3;
+                }
+                
+                input:checked + .slider:before {
+                    transform: translateX(26px);
+                }
+            </style>
+            <script>
+                function saveViewPreference(isGlance) {
+                    localStorage.setItem('preferGlanceView', isGlance);
+                }
+                
+                function loadViewPreference() {
+                    const preferGlance = localStorage.getItem('preferGlanceView') === 'true';
+                    document.getElementById('view-toggle').checked = preferGlance;
+                }
+                
+                function updateLinks() {
+                    const preferGlance = document.getElementById('view-toggle').checked;
+                    const links = document.querySelectorAll('.region-link');
+                    
+                    links.forEach(link => {
+                        const href = link.getAttribute('href');
+                        if (preferGlance) {
+                            link.setAttribute('href', href.replace('/ui/', '/glance/'));
+                        } else {
+                            link.setAttribute('href', href.replace('/glance/', '/ui/'));
+                        }
+                    });
+                    
+                    saveViewPreference(preferGlance);
+                }
+                
+                window.onload = function() {
+                    loadViewPreference();
+                    updateLinks();
+                    
+                    document.getElementById('view-toggle').addEventListener('change', updateLinks);
+                };
+            </script>
         </head>
         <body>
             <div class="container">
                 <h1>Archived Files</h1>
+                
+                <div class="view-toggle-container">
+                    <span class="view-toggle-label">Detailed</span>
+                    <label class="switch">
+                        <input type="checkbox" id="view-toggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="view-toggle-label">Glance</span>
+                </div>
+                
                 <ul>
     `;
 
@@ -131,7 +249,7 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
                         const fileName = file.split(".")[0];
                         html += `
                             <li>
-                                <a href="/archive/ui/${year}/${fileName}">${fileName}</a>
+                                <a class="region-link" href="/archive/ui/${year}/${fileName}">${fileName}</a>
                             </li>
                         `;
                     }
@@ -185,14 +303,146 @@ app.get(['/', '/ui'], async (req, res) => {
             <link rel="manifest" href="/fetch/data/manifest.json">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="/menu-styles.css">
+            <style>
+                .action-buttons {
+                    display: flex;
+                    justify-content: center;
+                    gap: 10px;
+                    margin-top: 20px;
+                }
+                .action-button {
+                    padding: 10px 20px;
+                    background-color: #007BFF;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    font-weight: bold;
+                    transition: background-color 0.3s;
+                }
+                .action-button:hover {
+                    background-color: #0056b3;
+                }
+                .preferences-button {
+                    background-color: #28a745;
+                }
+                .preferences-button:hover {
+                    background-color: #218838;
+                }
+                
+                /* Toggle switch styles */
+                .view-toggle-container {
+                    position: absolute;
+                    top: 10px;
+                    right: 20px;
+                    display: flex;
+                    align-items: center;
+                    z-index: 100;
+                }
+                
+                .view-toggle-label {
+                    margin: 0 10px;
+                    color: white;
+                    font-weight: bold;
+                }
+                
+                .switch {
+                    position: relative;
+                    display: inline-block;
+                    width: 60px;
+                    height: 34px;
+                }
+                
+                .switch input {
+                    opacity: 0;
+                    width: 0;
+                    height: 0;
+                }
+                
+                .slider {
+                    position: absolute;
+                    cursor: pointer;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background-color: #ccc;
+                    transition: .4s;
+                    border-radius: 34px;
+                }
+                
+                .slider:before {
+                    position: absolute;
+                    content: "";
+                    height: 26px;
+                    width: 26px;
+                    left: 4px;
+                    bottom: 4px;
+                    background-color: white;
+                    transition: .4s;
+                    border-radius: 50%;
+                }
+                
+                input:checked + .slider {
+                    background-color: #2196F3;
+                }
+                
+                input:focus + .slider {
+                    box-shadow: 0 0 1px #2196F3;
+                }
+                
+                input:checked + .slider:before {
+                    transform: translateX(26px);
+                }
+            </style>
+            <script>
+                function saveViewPreference(isGlance) {
+                    localStorage.setItem('preferGlanceView', isGlance);
+                }
+                
+                function loadViewPreference() {
+                    const preferGlance = localStorage.getItem('preferGlanceView') === 'true';
+                    document.getElementById('view-toggle').checked = preferGlance;
+                }
+                
+                function updateLinks() {
+                    const preferGlance = document.getElementById('view-toggle').checked;
+                    const links = document.querySelectorAll('.region-link');
+                    
+                    links.forEach(link => {
+                        const href = link.getAttribute('href');
+                        if (preferGlance) {
+                            link.setAttribute('href', href.replace('/ui/', '/glance/'));
+                        } else {
+                            link.setAttribute('href', href.replace('/glance/', '/ui/'));
+                        }
+                    });
+                    
+                    saveViewPreference(preferGlance);
+                }
+                
+                window.onload = function() {
+                    loadViewPreference();
+                    updateLinks();
+                    
+                    document.getElementById('view-toggle').addEventListener('change', updateLinks);
+                };
+            </script>
         </head>
         <body>
             <div class="container">
                 <h1>Autocross</h1>
+                
+                <div class="view-toggle-container">
+                    <label class="switch">
+                        <input type="checkbox" id="view-toggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
                 <ul>
                     ${Object.keys(regions).map(region => `
                         <li>
-                            <a href="/ui/${region}">${region}</a>
+                            <a class="region-link" href="/ui/${region}">${region}</a>
                             <a href="${regions[region].url}">${regions[region].software}</a>
                         </li>
                     `).join('')}
@@ -202,6 +452,7 @@ app.get(['/', '/ui'], async (req, res) => {
                         <a href="/archive">Archive</a>
                     </li>
                 </ul>
+                
             </div>
         </body>
         </html>
