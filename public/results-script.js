@@ -23,10 +23,71 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!window.location.pathname.endsWith('/')) {
         window.location.replace(window.location.pathname + '/');
     }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(event) {
+        const dropdown = document.getElementById('eventDropdown');
+        const inputBox = document.getElementById('inputBox');
+        
+        if (!dropdown.contains(event.target) && event.target !== inputBox) {
+            dropdown.style.display = 'none';
+        }
+    });
 
     regionData = getRegion();
     region = regionData.region;
     tour = regionData.isTour;
+
+    if (tour) {
+        getEvents(region).then(events => {
+            console.log("Tour event", events);
+            if (events.length > 1) {
+                document.getElementById("eventForm").style.display = "block";
+                document.getElementById("inputBox").placeholder = "Event Name";
+                
+                // Populate dropdown with event options
+                const dropdown = document.getElementById('eventDropdown');
+                dropdown.innerHTML = ''; // Clear existing options
+                
+                events.forEach(event => {
+                    const item = document.createElement('div');
+                    item.className = 'dropdown-item';
+                    item.textContent = event;
+                    item.addEventListener('click', function() {
+                        document.getElementById('inputBox').value = event;
+                        dropdown.style.display = 'none';
+                    });
+                    dropdown.appendChild(item);
+                });
+                
+                // Add input event listener to filter dropdown options
+                const inputBox = document.getElementById('inputBox');
+                
+                inputBox.addEventListener('input', function() {
+                    const filterValue = this.value.toLowerCase();
+                    const items = dropdown.getElementsByClassName('dropdown-item');
+                    
+                    for (let i = 0; i < items.length; i++) {
+                        const text = items[i].textContent.toLowerCase();
+                        if (text.includes(filterValue)) {
+                            items[i].style.display = '';
+                        } else {
+                            items[i].style.display = 'none';
+                        }
+                    }
+                });
+                
+                // Show dropdown when input is focused
+                inputBox.addEventListener('focus', function() {
+                    dropdown.style.display = 'block';
+                });
+                
+                return;
+            }
+        });
+    }
+
+
     cclass = getClass(region);
 
     if(tour){
@@ -200,6 +261,7 @@ async function getData(path) {
     try {
         const response = await fetch(path);
         const data = await response.json();
+        console.log('Data fetched successfully:', data);
         return data; // Data is returned here
     } catch (error) {
         console.error('Error fetching data:', error);
@@ -208,6 +270,10 @@ async function getData(path) {
 
 async function getClasses(region) {
     return await getData(`/${region}/classes`);
+}
+
+async function getEvents(region) {
+    return await getData(`/${region}/events`);
 }
 
 function classesOnly(classes, tour = false) {

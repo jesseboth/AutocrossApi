@@ -8,6 +8,7 @@ const path = require('path');
 const { get } = require('http');
 const { dir } = require('console');
 const { exec } = require('child_process');
+const { type } = require('os');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -35,6 +36,7 @@ const getJsonData = (filePath) => {
     }
 };
 const regions = getJsonData('data/regions.json');
+var settings = {};
 
 paxIndex = {}
 fetchPaxIndex().then(classIndexDict => {
@@ -346,6 +348,13 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
                 break;
         }
 
+        if(widget && req.params.b.toUpperCase() == "TOGGLE"){
+            toggleWidgetTiming(req.params.c.toUpperCase(), uuid);
+
+            res.json(settings[uuid]);
+            return;
+        }
+
         if (req.params.b != undefined) {
             region = req.params.b.toUpperCase();
             if (regions[region] && regions[region].tour) {
@@ -361,6 +370,18 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
                 cclass = region;
                 region = undefined;
             }
+            else if(region == "EVENTS"){
+                redirect = await getRedirectURL(regions["TOUR"].url);
+                if(redirect.includes("TwoEvents")){
+                    res.json(await fetchEventCodes(redirect));
+                    return;
+                } else {
+                    // parse out the event code
+                    code = redirect.split("/")
+                    res.json([code[3]])
+                    return 
+                }
+            }
         }
         else if(tour){
             region = req.params.b != undefined ? req.params.b.toUpperCase() : undefined;
@@ -368,6 +389,18 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             if(region == "CLASSES"){
                 cclass = region;
                 region = undefined;
+            }
+            else if(region == "EVENTS"){
+                redirect = await getRedirectURL(regions["TOUR"].url);
+                if(redirect.includes("TwoEvents")){
+                    res.json(await fetchEventCodes(redirect));
+                    return;
+                } else {
+                    // parse out the event code
+                    code = redirect.split("/")
+                    res.json([code[3]])
+                    return 
+                }
             }
         }
         else if (widget || ui) {
@@ -424,6 +457,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             data = await axware(region, region_dict, cclass, widget, userDriver, uuid)
 
             if(widget && cclass != "CLASSES"){
+                data = offSetAdjust(data, settings[uuid]);
                 incUpdates();
                 data["updates"] = updates;
             }
@@ -433,6 +467,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         else if (region_dict.software == "pronto") {
             data = await pronto(region, region_dict, cclass, widget, userDriver, uuid)
             if(widget && cclass != "CLASSES"){
+                data = offSetAdjust(data, settings[uuid]);
                 incUpdates();
                 data["updates"] = updates;
             }
@@ -550,6 +585,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                 runs = temp.times.length;
                 bestIndex = findBestTimeIndex(temp.times)
                 bestRawTime = convertToSeconds(temp.times[bestIndex]);
+                temp.raw = String(bestRawTime.toFixed(3));
                 if(widget && cclass == "RAW"){
                     temp.pax = String(bestRawTime.toFixed(3));
                 } else if(bestIndex > 0 && bestRawTime == convertToSeconds(temp.pax) && paxIndex[temp.index] != undefined){
@@ -839,6 +875,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         bestIndex2 = findBestTimeIndex(day2)
 
                         bestRawTime = convertToSeconds(day1[bestIndex], true) + convertToSeconds(day2[bestIndex2], true);
+                        temp.raw = String(bestRawTime.toFixed(3));
                         if(doRaw){
                             temp.pax = String(bestRawTime.toFixed(3));
                         }
@@ -849,7 +886,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                     else {
                         bestIndex = findBestTimeIndex(temp.times)
                         bestRawTime = convertToSeconds(temp.times[bestIndex]);
-
+                        temp.raw = String(bestRawTime.toFixed(3));
                         if(widget && cclass == "RAW"){
                             temp.pax = String(bestRawTime.toFixed(3));
                         } else if(bestIndex > 0 && bestRawTime == convertToSeconds(temp.pax) && paxIndex[temp.index] != undefined){
@@ -1409,6 +1446,24 @@ function errorCode(error, widget, type = "string", res = undefined) {
     }
 }
 
+async function getRedirectURL(url) {
+    return new Promise((resolve, reject) => {
+        axios.get(url)
+            .then(response => {
+                const redirectMatch = response.data.match(/location\.href\s*=\s*['"]([^'"]+)['"]/);
+                if (redirectMatch && redirectMatch[1]) {
+                    const redirectUrl = new URL(redirectMatch[1], url).href; // Resolve relative URL
+                    resolve(redirectUrl);
+                } else {
+                    resolve(url);
+                }
+            })
+            .catch(error => {
+                resolve(error.config.url);
+            });
+    });
+}
+
 async function getRedirect(url, region = undefined) {
     // Fetch the HTML from the URL
     let html = "";
@@ -1461,6 +1516,7 @@ async function fetchPaxIndex() {
                 if(carClass == ""){
                     continue;
                 }
+                carClass = carClass.split("(")[0].trim();
                 i++;
                 
                 let indexValue = ""
@@ -1486,6 +1542,29 @@ async function fetchPaxIndex() {
         console.error('Error fetching or parsing the table:', error);
     }
 }
+
+async function fetchEventCodes(url) {
+    try {
+      const response = await axios.get(url);
+      const $ = cheerio.load(response.data);
+  
+      const eventCodes = [];
+  
+      $('a[href*="index.php"]').each((_, el) => {
+        const href = $(el).attr('href');
+        const match = href.match(/\.\.\/([^/]+)\/index\.php/);
+        if (match && match[1]) {
+          eventCodes.push(match[1]);
+        }
+      });
+  
+      // Remove duplicates
+      return [...new Set(eventCodes)];
+    } catch (error) {
+      console.error('Error fetching or parsing HTML:', error.message);
+      return [];
+    }
+  }
 
 function isCar(str) {
     const regex = /^\d{4}\s+.+/;
@@ -1522,4 +1601,138 @@ function getColor(position, stats, driver, runs){
         color = color_none;
     }
     return color;
+}
+
+
+const pos = [ "prev", "first" ]
+const timearr = [ "pax", "match" ]
+function toggleWidgetTiming(compareto, uuid) {
+    switch (compareto) {
+        case "POS":
+            if (settings[uuid] == undefined) {
+                settings[uuid] = {
+                    "pos": "first",
+                    "time": "pax"
+                };
+            }
+            else if (settings[uuid].pos == pos[0]) {
+                settings[uuid].pos = pos[1];
+            }
+            else if (settings[uuid].pos == pos[1]) {
+                settings[uuid].pos = pos[0];
+            }
+            else {
+                settings[uuid].pos = pos[0];
+            }
+
+            break;
+        case "TYPE":
+            if (settings[uuid] == undefined) {
+                settings[uuid] = {
+                    "pos": "prev",
+                    "time": "match"
+                };
+
+            }
+            else if (settings[uuid].time == timearr[0]) {
+                settings[uuid].time = timearr[1];
+            }
+            else if (settings[uuid].time == timearr[1]) {
+                settings[uuid].time = timearr[0];
+            }
+            else {
+                settings[uuid].time = timearr[0];
+            }
+
+            break;
+        default:
+            break;
+    }
+
+    return settings[uuid];
+
+}
+
+function offSetAdjust(data, settings) {
+    if (settings == undefined) {
+        return data;
+    }
+    else if (settings.time == "pax" && settings.pos == "prev") {
+        return data;
+    }
+
+    const sortedKeys = Object.keys(data).sort((a, b) => Number(a) - Number(b));
+
+    if (settings.time == "pax" && settings.pos == "first") {
+        for (const key of sortedKeys) {
+          data[key].offset = data[key].pax - data["1"].pax;
+        }
+        data["1"].offset = "-";
+    }
+    else if (settings.time == "match" && settings.pos == "prev") {
+        // skip first
+
+        prev = null
+        for (const key of sortedKeys) {
+            if (!prev) {
+                prev = key;
+                continue;
+            }
+    
+            const currClass = data[key].index;
+            const prevClass = data[prev].index;
+    
+            const currIndex = parseFloat(paxIndex[currClass]);
+            const prevIndex = parseFloat(paxIndex[prevClass]);
+
+            if (isNaN(currIndex) || isNaN(prevIndex)) {
+                data[key].neededRawToMatchPrev = null;
+                data[key].rawOffsetFromTarget = null;
+                prev = key;
+                continue;
+            }
+    
+            const prevPaxTime = parseFloat(data[prev].raw) * prevIndex;
+            const neededRaw = prevPaxTime / currIndex;
+            const actualRaw = data[key].raw;
+            const offset = actualRaw - neededRaw;
+
+            data[key].pax = data[key].raw;
+            data[key].offset = "+" + offset.toFixed(3);
+    
+            prev = key;
+        }
+    }
+    else if (settings.time == "match" && settings.pos == "first") {
+            prev = null
+            for (const key of sortedKeys) {
+                if (!prev) {
+                    prev = "1";
+                    continue;
+                }
+        
+                const currClass = data[key].index;
+                const prevClass = data[prev].index;
+        
+                const currIndex = parseFloat(paxIndex[currClass]);
+                const prevIndex = parseFloat(paxIndex[prevClass]);
+
+                if (isNaN(currIndex) || isNaN(prevIndex)) {
+                    data[key].neededRawToMatchPrev = null;
+                    data[key].rawOffsetFromTarget = null;
+                    prev = key;
+                    continue;
+                }
+        
+                const prevPaxTime = parseFloat(data[prev].raw) * prevIndex;
+                const neededRaw = prevPaxTime / currIndex;
+                const actualRaw = data[key].raw;
+                const offset = actualRaw - neededRaw;
+
+                data[key].pax = data[key].raw;
+                data[key].offset = "+" + offset.toFixed(3);
+            }
+    }
+
+    return data;
 }

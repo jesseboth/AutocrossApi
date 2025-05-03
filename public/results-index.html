@@ -10,7 +10,12 @@
   <div id="formContainer">
     <form id="eventForm">
         <label for="inputBox">Event Code:</label>
-        <input type="text" id="inputBox" name="inputBox">
+        <div class="input-container">
+            <input type="text" id="inputBox" name="inputBox" autocomplete="off">
+            <div id="eventDropdown" class="dropdown-content">
+                <!-- Options will be populated here -->
+            </div>
+        </div>
         <button type="submit" class="submit-button">&#10148;</button>
     </form>
   </div>

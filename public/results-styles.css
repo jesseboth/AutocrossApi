@@ -122,6 +122,50 @@ a {
   z-index: 1000;
 }
 
+.input-container {
+  position: relative;
+  display: inline-block;
+}
+
+#inputBox {
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 180px;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #f9f9f9;
+  min-width: 180px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
+  border-radius: 0 0 4px 4px;
+}
+
+.dropdown-item {
+  color: black;
+  padding: 8px 12px;
+  text-decoration: none;
+  display: block;
+  cursor: pointer;
+}
+
+.dropdown-item:hover {
+  background-color: #f1f1f1;
+}
+
+#inputBox:focus + .dropdown-content {
+  display: block;
+}
+
+.dropdown-content:hover {
+  display: block;
+}
+
 .submit-button {
   background-color: #007bff;
   color: white;
@@ -130,4 +174,5 @@ a {
   border-radius: 5px;
   cursor: pointer;
   font-size: 12px;
+  vertical-align: middle;
 }
