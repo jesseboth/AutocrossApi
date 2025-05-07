@@ -72,6 +72,10 @@ app.get('/ui/:b/:c?/:d?', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
 });
 
+app.get('/widgetui/:b/:c?/:d?', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'widget-index.html'));
+});
+
 app.get('/archive/ui/:b/:c?/:d?', async (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
 });
@@ -196,6 +200,39 @@ app.get(['/', '/ui'], async (req, res) => {
                         <li>
                             <a href="/ui/${region}">${region}</a>
                             <a href="${regions[region].url}">${regions[region].software}</a>
+                        </li>
+                    `).join('')}
+                </ul>
+                <ul>
+                    <li>
+                        <a href="/archive">Archive</a>
+                    </li>
+                </ul>
+            </div>
+        </body>
+        </html>
+    `;
+
+    res.send(html);
+});
+
+app.get(['/', '/widgetui'], async (req, res) => {
+    let html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <link rel="manifest" href="/fetch/data/manifest.json">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <link rel="stylesheet" href="/menu-styles.css">
+        </head>
+        <body>
+            <div class="container">
+                <h1>Autocross</h1>
+                <ul>
+                    ${Object.keys(regions).map(region => `
+                        <li>
+                            <a href="/widgetui/${region}/pax">${region}</a>
                         </li>
                     `).join('')}
                 </ul>
@@ -741,6 +778,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                 }
             }
             else {
+                console.log(currentClass)
                 url = region.url + currentClass + ".php";
             }
 
