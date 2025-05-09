@@ -4,13 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Autocross Widget</title>
+    <script>
+        window.addEventListener("click", () => {
+            document.documentElement.requestFullscreen();
+        });
+    </script>
     <style>
+        html {
+            font-size: 85%;
+        }
+        
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         .toggle-button {
             position: absolute;
             top: 0.3rem;          /* 10px converted to rem */
@@ -24,6 +33,16 @@
             margin-left: 0.625rem;  /* 10px converted to rem */
             z-index: 100;
             width: 4rem;
+            height: 2rem;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        body.zoom {
+            transform: scale(.8); /* 1.2 = 120% zoom */
+            transform-origin: top left;
         }
 
         
@@ -32,7 +51,7 @@
         }
         
         #toggle-offset {
-            right: calc(1% + 80px);
+            right: calc(1% + 5rem); /* 80px converted to rem */
         }
         
         #back-button {
@@ -136,7 +155,7 @@
             overflow: hidden;
             text-overflow: ellipsis;
             flex: 1;
-            margin-top: 0.1rem; /* 5px converted to rem */
+            margin-top: 0.2rem; /* 5px converted to rem */
         }
         
         .recent-driver-time {
@@ -152,8 +171,8 @@
             display: flex;
             flex-direction: row;
             flex-wrap: nowrap; /* Prevent wrapping to enable horizontal scrolling */
-            gap: 10px;
-            padding: 5px 20px; /* Add horizontal padding */
+            gap: 0.625rem; /* 10px converted to rem */
+            padding: 0.3125rem 1.25rem; /* 5px 20px converted to rem */
             height: 8vh;
             width: 100%;
             background-color: #0e0e0e;
@@ -177,14 +196,14 @@
         }
         
         .staggered-button {
-            padding: 5px 15px;
+            padding: 0.3125rem 0.9375rem; /* 5px 15px converted to rem */
             background-color: #007BFF;
             color: white;
             border: none;
             cursor: pointer;
-            font-size: 12px;
-            border-radius: 4px;
-            height: 35px;
+            font-size: 0.75rem; /* 12px converted to rem */
+            border-radius: 0.25rem; /* 4px converted to rem */
+            height: 2rem;
             transition: background-color 0.3s ease;
             width: 3rem;
             /* center text */
@@ -201,10 +220,10 @@
         
         .grid-item {
             background-color: #0e0e0e;
-            border: 2px solid #007BFF;
+            border: 0.125rem solid #007BFF; /* 2px converted to rem */
             display: flex;
             flex-direction: column;
-            padding: 8px;
+            padding: 0.5rem; /* 8px converted to rem */
             font-family: Arial, sans-serif;
             color: white;
             overflow: hidden;
@@ -215,13 +234,13 @@
         .driver-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 4px;
+            margin-bottom: 0.25rem; /* 4px converted to rem */
         }
         
         .position {
             font-size: 1.5rem;
             font-weight: bold;
-            margin-right: 8px;
+            margin-right: 0.5rem; /* 8px converted to rem */
             color: #1e6ca7;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
@@ -229,11 +248,10 @@
         .number {
             font-size: 1.4rem;
             font-weight: bold;
-            margin-right: 8px;
+            margin-right: 0.5rem; /* 8px converted to rem */
             color: #aaaaaa;
-            margin-top: .3rem;
             width: 2rem;
-            margin-top: .2rem;
+            margin-top: 0rem;
             text-align: center;
             /* color: #0037ff; */
             color: #007BFF;
@@ -244,8 +262,8 @@
             font-weight: bold;
             flex-grow: 1;
             white-space: nowrap;
-            margin-top: .3rem;
-            margin-left: .2rem;
+            margin-top: 0.2rem;
+            margin-left: 0.2rem;
             overflow: hidden;
             text-overflow: ellipsis;
         }
@@ -253,20 +271,20 @@
         .car-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 15px; /* Increased from 4px to create more space */
+            margin-bottom: 0.9375rem; /* 15px converted to rem */
         }
         
         .index {
             color: #aaaaaa;
-            font-size: 1rem;
-            margin-right: 8px;
+            font-size: 1.1rem;
+            margin-right: 0.3rem; /* 8px converted to rem */
             width: 1.5rem;
             font-weight: 800;
         }
         
         .car {
-            font-size: 1rem;
-            margin-left: 2rem;
+            font-size: 1.2rem;
+            margin-left: 2.2rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -280,7 +298,7 @@
             font-size: 0.9rem;
             margin-bottom: 0.125rem;
             left: -.5rem;
-            margin-top: -3rem;
+            margin-top: -3.5rem;
             position: relative; /* Ensure it works with z-index */
             z-index: 3; /* Higher z-index to ensure it appears above */
         }
@@ -289,7 +307,7 @@
             display: flex;
             justify-content: flex-end;
             align-items: center;
-            font-size: 0.9rem;
+            font-size: 1rem;
             margin-bottom: 0.25rem;
             left: -.6rem;
             margin-top: -0.3125rem; /* Negative margin to pull it upward */
@@ -301,16 +319,16 @@
             display: flex;
             justify-content: flex-start;
             align-items: center;
-            font-size: 0.9rem;
+            font-size: .95rem;
             position: absolute;
-            bottom: 5px;
-            left: 8px;
-            right: 8px;
+            bottom: 0.3125rem; /* 5px converted to rem */
+            left: 0.5rem; /* 8px converted to rem */
+            right: 0.5rem; /* 8px converted to rem */
         }
         
         .times {
-            font-weight: 200;
-            color: #aaaaaa;
+            font-weight: 300;
+            color: #c7c7c7;
             margin-left: -.3rem;
         }
 
@@ -326,9 +344,33 @@
         }
 
         .tab {
-            padding-right: .3rem;
-            border-right: #333 solid 2px;
-            padding-left: .3rem;
+            padding-right: 0.3rem;
+            border-right: #333 solid 0.125rem; /* 2px converted to rem */
+            padding-left: 0.3rem;
+        }
+
+        .best-time {
+            color: #00c3ff;
+            font: 500;
+        }
+
+        .cone {
+            color: #b22020;
+            font-weight: 500;
+        }
+        
+        #refresh-icon {
+            display: inline-block;
+            transform-origin: center center;
+        }
+        
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
@@ -336,7 +378,7 @@
     <button class="toggle-button" id="toggle-time" onClick="toggleTime()">Pax</button>
     <button class="toggle-button" id="toggle-offset" onClick="toggleOffset()">Prev</button>
     <button class="toggle-button" id="back-button" onClick="goBack()">←</button>
-    <button class="toggle-button" id="refresh-button" onClick="refreshData()">↻</button>
+    <button class="toggle-button" id="refresh-button" onClick="refresh()"><span id="refresh-icon">↻</span></button>
     
     <div id="top-button-container" class="button-container">
     </div>
@@ -345,201 +387,201 @@
         <div id="1" class="grid-item">
             <div class="driver-row">
                 <span style="color: gold;" class="position">1</span>
-                <span class="number">19</span>
-                <span class="driver">Jesse Both</span>
+                <span class="number"></span>
+                <span class="driver"></span>
             </div>
             <div class="car-row">
-                <span class="index">DS</span>
-                <span class="car">2023 Golf R</span>
+                <span class="index"></span>
+                <span class="car"></span>
             </div>
             <div class="pax-row">
-                <span class="pax">29.857</span>
+                <span class="pax"></span>
             </div>
             <div class="offset-row">
-                <span class="offset">1.037</span>
+                <span class="offset"></span>
             </div>
             <div class="times-row">
-                <span class="times">Times</span>
+                <span class="times"></span>
             </div>
         </div>
         <div id="6" class="grid-item">
             <div class="driver-row">
                 <span class="position">6</span>
-                <span class="number">456</span>
-                <span class="driver">Driver Name</span>
+                <span class="number"></span>
+                <span class="driver"></span>
             </div>
             <div class="car-row">
-                <span class="index">Index</span>
-                <span class="car">Car Model</span>
+                <span class="index"></span>
+                <span class="car"></span>
             </div>
             <div class="pax-row">
-                <span class="pax">PAX</span>
+                <span class="pax"></span>
             </div>
             <div class="offset-row">
-                <span class="offset">Offset</span>
+                <span class="offset"></span>
             </div>
             <div class="times-row">
-                <span class="times">Times</span>
+                <span class="times"></span>
             </div>
         </div>
         <div id="2" class="grid-item">
             <div class="driver-row">
                 <span style="color: silver;" class="position">2</span>
-                <span class="number">234</span>
-                <span class="driver">Driver Name</span>
+                <span class="number"></span>
+                <span class="driver"></span>
             </div>
             <div class="car-row">
-                <span class="index">Index</span>
-                <span class="car">Car Model</span>
+                <span class="index"></span>
+                <span class="car"></span>
             </div>
             <div class="pax-row">
-                <span class="pax">PAX</span>
+                <span class="pax"></span>
             </div>
             <div class="offset-row">
-                <span class="offset">Offset</span>
+                <span class="offset"></span>
             </div>
             <div class="times-row">
-                <span class="times">Times</span>
+                <span class="times"></span>
             </div>
         </div>
         <div id="7" class="grid-item">
             <div class="driver-row">
                 <span class="position">7</span>
-                <span class="number">567</span>
-                <span class="driver">Driver Name</span>
+                <span class="number"></span>
+                <span class="driver"></span>
             </div>
             <div class="car-row">
-                <span class="index">Index</span>
-                <span class="car">Car Model</span>
+                <span class="index"></span>
+                <span class="car"></span>
             </div>
             <div class="pax-row">
-                <span class="pax">PAX</span>
+                <span class="pax"></span>
             </div>
             <div class="offset-row">
-                <span class="offset">Offset</span>
+                <span class="offset"></span>
             </div>
             <div class="times-row">
-                <span class="times">Times</span>
+                <span class="times"></span>
             </div>
         </div>
         <div id="3" class="grid-item">
             <div class="driver-row">
                 <span style="color: #aa5d10;" class="position">3</span>
-                <span class="number">345</span>
-                <span class="driver">Driver Name</span>
+                <span class="number"></span>
+                <span class="driver"></span>
             </div>
             <div class="car-row">
-                <span class="index">Index</span>
-                <span class="car">Car Model</span>
+                <span class="index"></span>
+                <span class="car"></span>
             </div>
             <div class="pax-row">
-                <span class="pax">PAX</span>
+                <span class="pax"></span>
             </div>
             <div class="offset-row">
-                <span class="offset">Offset</span>
+                <span class="offset"></span>
             </div>
             <div class="times-row">
-                <span class="times">Times</span>
+                <span class="times"></span>
             </div>
         </div>
         <div id="8" class="grid-item">
             <div class="driver-row">
                 <span class="position">8</span>
-                <span class="number">678</span>
-                <span class="driver">Driver Name</span>
+                <span class="number"></span>
+                <span class="driver"></span>
             </div>
             <div class="car-row">
-                <span class="index">Index</span>
-                <span class="car">Car Model</span>
+                <span class="index"></span>
+                <span class="car"></span>
             </div>
             <div class="pax-row">
-                <span class="pax">PAX</span>
+                <span class="pax"></span>
             </div>
             <div class="offset-row">
-                <span class="offset">Offset</span>
+                <span class="offset"></span>
             </div>
             <div class="times-row">
-                <span class="times">Times</span>
+                <span class="times"></span>
             </div>
         </div>
         <div id="4" class="grid-item">
             <div class="driver-row">
                 <span class="position">4</span>
-                <span class="number">456</span>
-                <span class="driver">Driver Name</span>
+                <span class="number"></span>
+                <span class="driver"></span>
             </div>
             <div class="car-row">
-                <span class="index">Index</span>
-                <span class="car">Car Model</span>
+                <span class="index"></span>
+                <span class="car"></span>
             </div>
             <div class="pax-row">
-                <span class="pax">PAX</span>
+                <span class="pax"></span>
             </div>
             <div class="offset-row">
-                <span class="offset">Offset</span>
+                <span class="offset"></span>
             </div>
             <div class="times-row">
-                <span class="times">Times</span>
+                <span class="times"></span>
             </div>
         </div>
         <div id="9" class="grid-item">
             <div class="driver-row">
                 <span class="position">9</span>
-                <span class="number">789</span>
-                <span class="driver">Driver Name</span>
+                <span class="number"></span>
+                <span class="driver"></span>
             </div>
             <div class="car-row">
-                <span class="index">Index</span>
-                <span class="car">Car Model</span>
+                <span class="index"></span>
+                <span class="car"></span>
             </div>
             <div class="pax-row">
-                <span class="pax">PAX</span>
+                <span class="pax"></span>
             </div>
             <div class="offset-row">
-                <span class="offset">Offset</span>
+                <span class="offset"></span>
             </div>
             <div class="times-row">
-                <span class="times">Times</span>
+                <span class="times"></span>
             </div>
         </div>
         <div id="5" class="grid-item">
             <div class="driver-row">
                 <span class="position">5</span>
-                <span class="number">567</span>
-                <span class="driver">Driver Name</span>
+                <span class="number"></span>
+                <span class="driver"></span>
             </div>
             <div class="car-row">
-                <span class="index">Index</span>
-                <span class="car">Car Model</span>
+                <span class="index"></span>
+                <span class="car"></span>
             </div>
             <div class="pax-row">
-                <span class="pax">PAX</span>
+                <span class="pax"></span>
             </div>
             <div class="offset-row">
-                <span class="offset">Offset</span>
+                <span class="offset"></span>
             </div>
             <div class="times-row">
-                <span class="times">Times</span>
+                <span class="times"></span>
             </div>
         </div>
         <div id="10" class="grid-item">
             <div class="driver-row">
                 <span class="position">10</span>
-                <span class="number">890</span>
-                <span class="driver">Driver Name</span>
+                <span class="number"></span>
+                <span class="driver"></span>
             </div>
             <div class="car-row">
-                <span class="index">Index</span>
-                <span style="margin-left: 3rem" class="car">Car Model</span>
+                <span class="index"></span>
+                <span class="car"></span>
             </div>
             <div class="pax-row">
-                <span class="pax">PAX</span>
+                <span class="pax"></span>
             </div>
             <div class="offset-row">
-                <span class="offset">Offset</span>
+                <span class="offset"></span>
             </div>
             <div class="times-row">
-                <span class="times">Times</span>
+                <span class="times"></span>
             </div>
         </div>
         </div>
@@ -552,6 +594,5 @@
     <div id="button-container" class="button-container">
     </div>
 </body>
-
 <script src="/widget-script.js"></script>
 </html>

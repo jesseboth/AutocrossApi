@@ -58,6 +58,8 @@ cron.schedule('0 0 * * 1', async function () {
 });
 
 let event_stats = {};
+// Track the most recent runs (driver name and number of runs)
+let recent_runs = {};
 reset_stats();
 
 // Schedule a task to run every Sunday at 2:30 AM
@@ -385,13 +387,6 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
                 break;
         }
 
-        if(widget && req.params.b.toUpperCase() == "TOGGLE"){
-            toggleWidgetTiming(req.params.c.toUpperCase(), uuid);
-
-            res.json(settings[uuid]);
-            return;
-        }
-
         if (req.params.b != undefined) {
             region = req.params.b.toUpperCase();
             if (regions[region] && regions[region].tour) {
@@ -468,6 +463,16 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             res.json(Object.keys(regions));
             return;
         }
+
+        // Handle request for recent runs
+        if(req.params.b && req.params.b.toLowerCase() === "recent"){
+            if (recent_runs[region]) {
+                res.json(recent_runs[region]);
+            } else {
+                res.json([]);
+            }
+            return;
+        }
     
         if (!tour && !regions.hasOwnProperty(region)) {
             res.status(500).send(errorCode("Region not found", widget));
@@ -494,7 +499,6 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
             data = await axware(region, region_dict, cclass, widget, userDriver, uuid)
 
             if(widget && cclass != "CLASSES"){
-                data = offSetAdjust(data, settings[uuid]);
                 incUpdates();
                 data["updates"] = updates;
             }
@@ -504,7 +508,6 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         else if (region_dict.software == "pronto") {
             data = await pronto(region, region_dict, cclass, widget, userDriver, uuid)
             if(widget && cclass != "CLASSES"){
-                data = offSetAdjust(data, settings[uuid]);
                 incUpdates();
                 data["updates"] = updates;
             }
@@ -573,7 +576,10 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                             ;
                         }
                         else if (element == "t") {
-                            temp.times.push(simplifyTime($(columns[col]).text().trim()));
+                            simpletime = simplifyTime($(columns[col]).text().trim())
+                            if (simpletime != ""){
+                                temp.times.push(simpletime);
+                            }
                         }
                         else if (element.startsWith("t-")) {
                             const before = parseInt(element.split("-")[1]);
@@ -615,20 +621,16 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
 
                 temp.position = temp.position.split("T")[0];
                 intPosition = parseInt(temp.position)
-                if (widget && temp.class == cclass) {
-                    temp.color = getColor(intPosition, stats, temp.driver, temp.times.length);
-                }
 
                 runs = temp.times.length;
                 bestIndex = findBestTimeIndex(temp.times)
                 bestRawTime = convertToSeconds(temp.times[bestIndex]);
                 temp.raw = String(bestRawTime.toFixed(3));
-                if(widget && cclass == "RAW"){
-                    temp.pax = String(bestRawTime.toFixed(3));
-                } else if(bestIndex > 0 && bestRawTime == convertToSeconds(temp.pax) && paxIndex[temp.index] != undefined){
+                if(bestIndex > 0 && bestRawTime == convertToSeconds(temp.pax) && paxIndex[temp.index] != undefined){
                     temp.pax = String((bestRawTime * paxIndex[temp.index]).toFixed(3));
                 }
-                temp.times = beautifyTimes(temp.times, bestIndex, widget);
+
+                temp.rawidx = bestIndex;
 
                 if (!results.hasOwnProperty(temp.class)) {
                     ;
@@ -641,7 +643,15 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                     temp.offset = temp.pax - results[temp.class]["9"].pax;
                     results[temp.class]["10"] = { ...temp }
                 }
-                if (widget && temp.class == cclass) {
+                if (widget) {
+                    console.log(temp.driver)
+                    if (stats[temp.driver] != undefined && stats[temp.driver].runs < runs) {
+                        // Get the most recent time (last time in the array)
+                        const lastTime = temp.times.length > 0 ? temp.times[temp.times.length - 1] : '';
+                        updateRecentRuns(region_name, temp.driver, temp.number, runs, lastTime);
+                    }
+
+                    // Update recent runs tracking
                     stats[temp.driver] = { "position": intPosition, "runs": runs }
                 }
                 temp = {}
@@ -871,26 +881,6 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                     temp.pax = simplifyTime(temp.pax);
 
                     intPosition = parseInt(temp.position)
-                    if (widget) {
-                        temp.color = getColor(intPosition, stats, temp.driver, temp.times.length);
-                        if (stats.hasOwnProperty(temp.driver)) {
-                            if (intPosition < stats[temp.driver].position) {
-                                temp.color = color_upPos;
-                            }
-                            else if (intPosition > stats[temp.driver].position) {
-                                temp.color = color_downPos;
-                            }
-                            else if (temp.times.length > stats[temp.driver].runs) {
-                                temp.color = color_newTime;
-                            }
-                            else {
-                                temp.color = color_none;
-                            }
-                        }
-                        else {
-                            temp.color = color_none;
-                        }
-                    }
 
                     runs = temp.times.length;
                     if(widget){
@@ -949,6 +939,14 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         results[temp.class]["10"].class = store;
                     }
                     if (widget) {
+
+                        if (stats[temp.driver] != undefined && stats[temp.driver].runs < runs) {
+                            // Get the most recent time (last time in the array)
+                            const lastTime = temp.times.length > 0 ? temp.times[temp.times.length - 1] : '';
+                            updateRecentRuns(region_name, temp.driver, temp.number, runs, lastTime);
+                        }
+
+                        // Update recent runs tracking
                         stats[temp.driver] = { "position": intPosition, "runs": runs }
                     }
                     temp = {}
@@ -997,16 +995,16 @@ function new_results(widget) {
     }
 
     return {
-        "1": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "1", "color": "#ffffff" },
-        "2": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "2", "color": "#ffffff" },
-        "3": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "3", "color": "#ffffff" },
-        "4": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "4", "color": "#ffffff" },
-        "5": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "5", "color": "#ffffff" },
-        "6": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "6", "color": "#ffffff" },
-        "7": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "7", "color": "#ffffff" },
-        "8": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "8", "color": "#ffffff" },
-        "9": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "9", "color": "#ffffff" },
-        "10": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "color": "#ffffff" },
+        "1":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "1",  "raw": "" },
+        "2":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "2",  "raw": "" },
+        "3":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "3",  "raw": "" },
+        "4":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "4",  "raw": "" },
+        "5":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "5",  "raw": "" },
+        "6":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "6",  "raw": "" },
+        "7":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "7",  "raw": "" },
+        "8":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "8",  "raw": "" },
+        "9":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "9",  "raw": "" },
+        "10": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "raw": "" },
     }
 }
 
@@ -1123,42 +1121,6 @@ function bestTime(times, bestIdx, widget) {
     return times;
 }
 
-function beautifyTimes(times, bestIdx, widget) {
-    if (!widget) {
-        return times;
-    }
-
-    arr = []
-    for (i = 0; i < times.length; i++) {
-        if (times.length > 8 && times[i].includes("[b]")) {
-            arr.push(times[i])
-        }
-
-        if (times[i].startsWith("[b]")) {
-            continue;
-        }
-        split = times[i].split("+")
-        if (split.length > 1) {
-            split[1] = split[1] + "[/c]"
-        }
-        if (i == bestIdx) {
-            split[0] = "[b][c=#ff54ccff]" + split[0] + "[/c][/b]"
-        }
-        times[i] = split.join("[c=#ffde6868]+")
-
-    }
-
-    if (times.length > 8) {
-        retval = arr.join('   ').trim();
-    }
-    else {
-        retval = times.join('   ').trim();
-    }
-    if (retval == "") { retval = " " }
-
-    return retval;
-}
-
 function convertToSeconds(time, tour = false) {
     if (time == undefined || time == "" || time.includes('DNF') || time.includes('OFF') || time.includes('DSQ') || time.includes("RRN") || time == "NO TIME") {
         return Infinity;
@@ -1199,6 +1161,27 @@ function findBestTimeIndex(times) {
 
 function reset_stats() {
     event_stats = {};
+    recent_runs = {};
+}
+
+// Function to update the most recent runs
+function updateRecentRuns(region, driverName, driverNumber, runCount, lastTime) {
+    if (!recent_runs[region]) {
+        recent_runs[region] = [];
+    }
+
+    // Add the driver to the beginning of the array
+    recent_runs[region].unshift({
+        driver: driverName,
+        number: driverNumber || '',
+        runs: runCount,
+        time: lastTime || '' // Store the most recent time
+    });
+    
+    // Keep only the 6 most recent runs
+    if (recent_runs[region].length > 6) {
+        recent_runs[region] = recent_runs[region].slice(0, 6);
+    }
 }
 
 // Function to add a name if it doesn't already exist
@@ -1246,8 +1229,7 @@ function pax(results, widget, stats, user_driver = undefined) {
         }
 
         if (widget) {
-            const runs = flattenedData[i].times.split("   ").filter(item => item.trim() !== "").length;
-            flattenedData[i].color = getColor(i+1, stats, flattenedData[i].driver, runs);
+            const runs = flattenedData[i].times.length;
             stats[flattenedData[i].driver] = { "position": i + 1, "runs": runs }
 
             if (i < 10) {
@@ -1615,162 +1597,4 @@ function incUpdates() {
         updates = 0;
     }
     return updates;
-}
-
-function getColor(position, stats, driver, runs){
-    if (stats.hasOwnProperty(driver)) {
-        if (position < stats[driver].position) {
-            color = color_upPos;
-        }
-        else if (position > stats[driver].position) {
-            color = color_downPos;
-        }
-        else if (runs > stats[driver].runs) {
-            temp.color = color_newTime;
-        }
-        else {
-            color = color_none;
-        }
-    }
-    else if(runs > 1 && Object.keys(stats).length >= position){
-        color = color_upPos;
-    }
-    else {
-        color = color_none;
-    }
-    return color;
-}
-
-
-const pos = [ "prev", "first" ]
-const timearr = [ "pax", "match" ]
-function toggleWidgetTiming(compareto, uuid) {
-    switch (compareto) {
-        case "POS":
-            if (settings[uuid] == undefined) {
-                settings[uuid] = {
-                    "pos": "first",
-                    "time": "pax"
-                };
-            }
-            else if (settings[uuid].pos == pos[0]) {
-                settings[uuid].pos = pos[1];
-            }
-            else if (settings[uuid].pos == pos[1]) {
-                settings[uuid].pos = pos[0];
-            }
-            else {
-                settings[uuid].pos = pos[0];
-            }
-
-            break;
-        case "TYPE":
-            if (settings[uuid] == undefined) {
-                settings[uuid] = {
-                    "pos": "prev",
-                    "time": "match"
-                };
-
-            }
-            else if (settings[uuid].time == timearr[0]) {
-                settings[uuid].time = timearr[1];
-            }
-            else if (settings[uuid].time == timearr[1]) {
-                settings[uuid].time = timearr[0];
-            }
-            else {
-                settings[uuid].time = timearr[0];
-            }
-
-            break;
-        default:
-            break;
-    }
-
-    return settings[uuid];
-
-}
-
-function offSetAdjust(data, settings) {
-    if (settings == undefined) {
-        return data;
-    }
-    else if (settings.time == "pax" && settings.pos == "prev") {
-        return data;
-    }
-
-    const sortedKeys = Object.keys(data).sort((a, b) => Number(a) - Number(b));
-
-    if (settings.time == "pax" && settings.pos == "first") {
-        for (const key of sortedKeys) {
-          data[key].offset = data[key].pax - data["1"].pax;
-        }
-        data["1"].offset = "-";
-    }
-    else if (settings.time == "match" && settings.pos == "prev") {
-        // skip first
-
-        prev = null
-        for (const key of sortedKeys) {
-            if (!prev) {
-                prev = key;
-                continue;
-            }
-    
-            const currClass = data[key].index;
-            const prevClass = data[prev].index;
-    
-            const currIndex = parseFloat(paxIndex[currClass]);
-            const prevIndex = parseFloat(paxIndex[prevClass]);
-
-            if (isNaN(currIndex) || isNaN(prevIndex)) {
-                data[key].neededRawToMatchPrev = null;
-                data[key].rawOffsetFromTarget = null;
-                prev = key;
-                continue;
-            }
-    
-            const prevPaxTime = parseFloat(data[prev].raw) * prevIndex;
-            const neededRaw = prevPaxTime / currIndex;
-            const actualRaw = data[key].raw;
-            const offset = actualRaw - neededRaw;
-
-            data[key].pax = data[key].raw;
-            data[key].offset = "+" + offset.toFixed(3);
-    
-            prev = key;
-        }
-    }
-    else if (settings.time == "match" && settings.pos == "first") {
-            prev = null
-            for (const key of sortedKeys) {
-                if (!prev) {
-                    prev = "1";
-                    continue;
-                }
-        
-                const currClass = data[key].index;
-                const prevClass = data[prev].index;
-        
-                const currIndex = parseFloat(paxIndex[currClass]);
-                const prevIndex = parseFloat(paxIndex[prevClass]);
-
-                if (isNaN(currIndex) || isNaN(prevIndex)) {
-                    data[key].neededRawToMatchPrev = null;
-                    data[key].rawOffsetFromTarget = null;
-                    prev = key;
-                    continue;
-                }
-        
-                const prevPaxTime = parseFloat(data[prev].raw) * prevIndex;
-                const neededRaw = prevPaxTime / currIndex;
-                const actualRaw = data[key].raw;
-                const offset = actualRaw - neededRaw;
-
-                data[key].pax = data[key].raw;
-                data[key].offset = "+" + offset.toFixed(3);
-            }
-    }
-
-    return data;
 }

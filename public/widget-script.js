@@ -30,12 +30,25 @@ let setup = false;
 
 const link = "widgetui"
 
-// run function every second
-// i = 0;
 loop();
-setInterval(() => {
+let intervalId = setInterval(loop, 30000);
+
+function refreshLoop() {
+    clearInterval(intervalId);
+    intervalId = setInterval(loop, 30000);
     loop();
-}, 1000*30);
+}
+
+function refresh() {
+    document.getElementById("refresh-icon").style.display = "inline-block";
+    document.getElementById("refresh-icon").style.animation = "spin 1s linear infinite";
+
+    setTimeout(() => {
+        document.getElementById("refresh-icon").style.animation = "none";
+    }
+    , 1000);
+    refreshLoop();
+}
 
 async function loop() {
     i = 0;
@@ -47,7 +60,15 @@ async function loop() {
         }
     }
 
-    console.log(g_class)
+    console.log(g_class);
+    
+    // Fetch recent drivers
+    if (region) {
+        fetchRecentDrivers().catch(error => {
+            console.error('Error fetching recent drivers:', error);
+        });
+    }
+    
     getResults(g_class).then(data => {
         // populate grid here
         const gridContainer = document.querySelector('.grid-container');
@@ -64,17 +85,6 @@ async function loop() {
                 const positionSpan = driverRow.querySelector('.position');
                 const numberSpan = driverRow.querySelector('.number');
                 const driverSpan = driverRow.querySelector('.driver');
-                
-                // Set position color based on medal positions
-                if (i === 1) {
-                    positionSpan.style.color = 'gold';
-                } else if (i === 2) {
-                    positionSpan.style.color = 'silver';
-                } else if (i === 3) {
-                    positionSpan.style.color = '#aa5d10'; // bronze
-                } else {
-                    positionSpan.style.color = '#1e6ca7'; // default blue
-                }
                 
                 positionSpan.textContent = position;
                 numberSpan.textContent = data[position].number || '';
@@ -104,35 +114,21 @@ async function loop() {
                 const timesRow = gridItem.querySelector('.times-row');
                 const timesSpan = timesRow.querySelector('.times');
                 timesSpan.textContent = '';
-                console.log(data[position].times)
-                for(j = 0; j < data[position].times.length; j++) {
+
+                for(j = data[position].times.length - 6; j < data[position].times.length; j++) {
                     time = data[position].times[j];
                     if(time != undefined && time != "") {
-                        timesSpan.innerHTML += '<span class="tab">'+time+'</span>';
+                        cones = time.split("+")[1] ? "+<span class='cone'>" + time.split("+")[1] + "</span>" : "";
+                        time = time.split("+")[0]
+                        if(j == data[position].rawidx) {
+                            timesSpan.innerHTML += '<span class="tab best-time"><b>'+time+cones+'</b></span>';
+                        }
+                        else {
+                            if(time != undefined && time.trim() != "") {
+                                timesSpan.innerHTML += '<span class="tab">'+time+cones+'</span>';
+                            }
+                        }
                     }
-                }
-                
-                // Apply color if specified
-                if (data[position].color) {
-                    gridItem.style.borderColor = data[position].color;
-                } else {
-                    gridItem.style.borderColor = '#007BFF'; // Default border color
-                }
-            }
-        }
-        
-        // Update recent drivers if there are any new times
-        if (data.updates && data.updates > 0) {
-            // Check for new times and add to recent drivers
-            for (let i = 1; i <= 10; i++) {
-                const position = i.toString();
-                if (data[position] && data[position].color === color_newTime) {
-                    addRecentDriver(
-                        data[position].number,
-                        data[position].driver,
-                        data[position].pax
-                    );
-                    break; // Only add the most recent one
                 }
             }
         }
@@ -142,34 +138,42 @@ async function loop() {
     });
 }
 
-// Function to add a recent driver
-function addRecentDriver(number, name, time) {
-    // Check if driver already exists in the list
-    const existingIndex = recentDrivers.findIndex(driver => driver.number === number && driver.name === name);
-    
-    if (existingIndex !== -1) {
-        // Update the existing driver's time
-        recentDrivers[existingIndex].time = time;
-        
-        // Move the driver to the top of the list
-        const driver = recentDrivers.splice(existingIndex, 1)[0];
-        recentDrivers.unshift(driver);
-    } else {
-        // Add new driver to the beginning of the array
-        recentDrivers.unshift({
-            number: number,
-            name: name,
-            time: time
-        });
-        
-        // Keep only the maximum number of recent drivers
-        if (recentDrivers.length > MAX_RECENT_DRIVERS) {
-            recentDrivers.pop();
+// Function to fetch recent drivers from the server
+async function fetchRecentDrivers() {
+    try {
+        const data = await getData(`/${region}/recent`);
+        if (data && Array.isArray(data)) {
+            // Clear the current array
+            recentDrivers.length = 0;
+            
+            // Add each driver from the server data
+            data.forEach(driver => {
+                // Format the time display
+                let timeDisplay = `${driver.runs} runs`;
+                if (driver.time) {
+                    // Check if it's a valid time format (e.g., "30.123")
+                    if (!isNaN(parseFloat(driver.time))) {
+                        timeDisplay = driver.time; // It's a valid time
+                    } else if (driver.time.trim() !== '') {
+                        timeDisplay = driver.time; // It's some other non-empty string
+                    }
+                }
+                
+                recentDrivers.push({
+                    number: driver.number || '', // Use the driver number from the server
+                    name: driver.driver,
+                    time: timeDisplay
+                });
+            });
+
+            console.log('Recent drivers fetched successfully:', recentDrivers);
+            
+            // Update the display
+            updateRecentDriversDisplay();
         }
+    } catch (error) {
+        console.error('Error fetching recent drivers:', error);
     }
-    
-    // Update the display
-    updateRecentDriversDisplay();
 }
 
 // Function to update the recent drivers display
@@ -235,34 +239,11 @@ function updateRecentDriversDisplay() {
     }
 }
 
-// Function to remove a recent driver
-function removeRecentDriver(number, name) {
-    const index = recentDrivers.findIndex(driver => driver.number === number && driver.name === name);
-    if (index !== -1) {
-        recentDrivers.splice(index, 1);
-        updateRecentDriversDisplay();
-    }
-}
-
-// Function to initialize recent drivers with sample data
-function initializeRecentDrivers() {
-    // Sample data for 6 drivers
-    addRecentDriver('19', 'Jesse Both', '29.857');
-    addRecentDriver('234', 'John Smith', '30.123');
-    addRecentDriver('345', 'Jane Doe', '31.456');
-    addRecentDriver('456', 'Alex Johnson', '32.789');
-    addRecentDriver('567', 'Sam Wilson', '33.012');
-    addRecentDriver('678', 'Taylor Smith', '34.567');
-}
-
 // Wait for the DOM content to load
 document.addEventListener("DOMContentLoaded", function () {
     if (!window.location.pathname.endsWith('/')) {
         window.location.replace(window.location.pathname + '/');
     }
-
-    // Initialize recent drivers
-    initializeRecentDrivers();
 
     regionData = getRegion();
     region = regionData.region;
@@ -372,18 +353,6 @@ function goBack() {
     const baseUrl = window.location.protocol + "//" + window.location.host;
     // Navigate to the widget UI
     window.location.href = baseUrl + "/widgetui";
-}
-
-// Function to refresh data and update the display
-function refreshData() {
-    console.log("Refreshing data...");
-    // Add a new random driver for demonstration
-    const randomNum = Math.floor(Math.random() * 900) + 100;
-    const names = ["Alex Johnson", "Sam Wilson", "Taylor Smith", "Jordan Lee", "Casey Brown", "Morgan White"];
-    const randomName = names[Math.floor(Math.random() * names.length)];
-    const randomTime = (Math.random() * 5 + 28).toFixed(3);
-    
-    addRecentDriver(randomNum.toString(), randomName, randomTime);
 }
 
 function toggleURL(add = "pax") {
@@ -587,6 +556,11 @@ function setClasses(cclass, classes, tour = false, create = false) {
             if (button.innerHTML == cclass) {
                 console.log("here", button.innerHTML, cclass)
                 button.style.backgroundColor = "#ff0000";
+
+                if (g_class != cclass) {
+                    refreshLoop();
+                }
+
                 g_class = cclass;
             }
             else {
@@ -606,7 +580,7 @@ async function getResults(cclass = "") {
         }
     }
     path = newPath.join('/');
-    return await getData('/' + path + '/' + cclass);
+    return await getData('/widget/' + path + '/' + cclass);
 }
 
 function convertToSeconds(time) {
