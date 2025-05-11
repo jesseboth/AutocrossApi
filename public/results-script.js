@@ -414,7 +414,7 @@ function generateTableRows(entries) {
         //     entry.times[bestTimeIndex] = `<b style="border: 1px solid black; padding: 2px; color: black;">${entry.times[bestTimeIndex]}</b>`;
         // }
 
-        let numTimes = Math.max(3, entry.times.length / 2);  // At least 3 columns for times
+        let numTimes = Math.max(4, entry.times.length / 2);  // At least 3 columns for times
         rows += `<tr class="${rowClass}">
           <td style="width:5%;" nowrap align="center">${entry.position}</td>
           <td style="width:7%;" nowrap align="right">${entry.index}</td>

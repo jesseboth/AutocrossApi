@@ -14,7 +14,8 @@
       "software": "axware",
       "archive": true,
       "format": [
-          ["position", "index", "number", "driver", "car", null, "t-2", "pax", "offset"]
+          ["position", "index", "number", "driver", "car", null, "t-", "pax"],
+          ["-", "offset"]
       ],
       "data": { "element":".live", "offset": 4 }
 

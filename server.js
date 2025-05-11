@@ -60,7 +60,65 @@ cron.schedule('0 0 * * 1', async function () {
 let event_stats = {};
 // Track the most recent runs (driver name and number of runs)
 let recent_runs = {};
+// Track the last time axware or pronto was called for each region
+let last_api_call = {};
+// Store the last parameters used for each region
+let last_params = {};
+// Store the timers for each region
+let region_timers = {};
+// Timer to check if data should be reset (1 hour = 3600000 ms)
+const RESET_TIMEOUT = 3600000;
+// Timer interval (1 minute = 60000 ms)
+const TIMER_INTERVAL = 60000;
 reset_stats();
+
+// Function to start a timer for a region
+function startRegionTimer(region_name, region_dict, cclass, widget, user_driver, uuid, software) {
+    // Store the parameters for this region
+    last_params[region_name] = {
+        region_dict,
+        cclass,
+        widget,
+        user_driver,
+        uuid,
+        software
+    };
+    
+    // Clear any existing timer for this region
+    if (region_timers[region_name]) {
+        clearInterval(region_timers[region_name].timer);
+    }
+    
+    // Set the start time
+    const startTime = Date.now();
+    
+    // Create a new timer
+    const timer = setInterval(() => {
+        const currentTime = Date.now();
+        
+        // If it's been more than an hour since the timer started, stop it
+        if (currentTime - startTime > RESET_TIMEOUT) {
+            clearInterval(timer);
+            delete region_timers[region_name];
+            return;
+        }
+        
+        // Call the appropriate function with the stored parameters
+        if (software === 'axware') {
+            axware(region_name, region_dict, cclass, widget, user_driver, uuid)
+                .catch(error => console.error(`Error refreshing axware data for ${region_name}:`, error));
+        } else if (software === 'pronto') {
+            pronto(region_name, region_dict, cclass, widget, user_driver, uuid)
+                .catch(error => console.error(`Error refreshing pronto data for ${region_name}:`, error));
+        }
+    }, TIMER_INTERVAL);
+    
+    // Store the timer and start time
+    region_timers[region_name] = {
+        timer,
+        startTime
+    };
+}
 
 // Schedule a task to run every Sunday at 2:30 AM
 cron.schedule('30 2 * * 0', () => {
@@ -84,6 +142,15 @@ app.get('/archive/ui/:b/:c?/:d?', async (req, res) => {
 
 app.get('/fetch/:a/:b/:c?', async (req, res) => {
     res.sendFile(path.join(__dirname, req.params.a ? req.params.a : "", req.params.b ? req.params.b : "", req.params.c ? req.params.c : ""));
+});
+
+app.get('/debug', async (req, res) => {
+    if (DEBUG) {
+        res.sendFile(path.join(__dirname, 'public', 'debug.js'));
+    }
+    else {
+        res.sendFile(path.join(__dirname, 'public', 'noDebug.js'));
+    }
 });
 
 
@@ -228,9 +295,9 @@ app.get(['/', '/widgetui'], async (req, res) => {
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="/menu-styles.css">
         </head>
-        <body>
+        <body class="dark">
             <div class="container">
-                <h1>Autocross</h1>
+                <h1 class="dark">Autocross</h1>
                 <ul>
                     ${Object.keys(regions).map(region => `
                         <li>
@@ -528,6 +595,18 @@ app.listen(PORT, () => {
 });
 
 async function axware(region_name, region, cclass, widget = false, user_driver = undefined, uuid = undefined) {
+    // Update the last API call time
+    const currentTime = Date.now();
+    last_api_call[region_name] = currentTime;
+    
+    // Reset recent runs if this is a new session
+    if (!recent_runs[region_name]) {
+        recent_runs[region_name] = [];
+    }
+    
+    // Start or reset the timer for this region
+    startRegionTimer(region_name, region, cclass, widget, user_driver, uuid, 'axware');
+    
     const url = region.url;
 
     let stats = {}
@@ -582,9 +661,30 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                             }
                         }
                         else if (element.startsWith("t-")) {
-                            const before = parseInt(element.split("-")[1]);
-                            for (col; col < columns.length - before - 1; col++, format_offset++) {
-                                temp.times.push(simplifyTime($(columns[col]).text().trim()));
+                            const before = parseInt(element.split("-")[1]) || 0;
+                            for (col; col < columns.length - before; col++, format_offset++) {
+                                simpletime = simplifyTime($(columns[col]).text().trim())
+                                if (simpletime != ""){
+                                    temp.times.push(simpletime);
+                                }
+                                else {
+                                    break;
+                                }
+                            }
+
+                            for (col; col < columns.length; col++, format_offset++) {
+                                if ($(columns[col+1]).text().trim() != "") {
+                                    break;
+                                }
+                            }
+
+                        }
+                        else if(element == "-"){
+                            // loop columns until we find a non-empty value
+                            for (col; col < columns.length; col++, format_offset++) {
+                                if ($(columns[col+1]).text().trim() != "") {
+                                    break;
+                                }
                             }
                         }
                         else {
@@ -613,7 +713,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                     temp.index = temp.index.slice(currentClass.length).trim();
                 }
 
-                if (temp.offset == "" || temp.offset.startsWith("[-]")) {
+                if (!temp.offset || temp.offset == "" || temp.offset.startsWith("[-]")) {
                     temp.offset = "-"
                 }
 
@@ -644,7 +744,6 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                     results[temp.class]["10"] = { ...temp }
                 }
                 if (widget) {
-                    console.log(temp.driver)
                     if (stats[temp.driver] != undefined && stats[temp.driver].runs < runs) {
                         // Get the most recent time (last time in the array)
                         const lastTime = temp.times.length > 0 ? temp.times[temp.times.length - 1] : '';
@@ -708,6 +807,18 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
 }
 
 async function pronto(region_name, region, cclass, widget = false, user_driver = undefined, uuid = undefined) {
+    // Update the last API call time
+    const currentTime = Date.now();
+    last_api_call[region_name] = currentTime;
+    
+    // Reset recent runs if this is a new session
+    if (!recent_runs[region_name]) {
+        recent_runs[region_name] = [];
+    }
+    
+    // Start or reset the timer for this region
+    startRegionTimer(region_name, region, cclass, widget, user_driver, uuid, 'pronto');
+    
     let classes = [cclass];
     let backup = [];
     let doPax = false;
@@ -788,7 +899,6 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                 }
             }
             else {
-                console.log(currentClass)
                 url = region.url + currentClass + ".php";
             }
 
@@ -883,11 +993,11 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                     intPosition = parseInt(temp.position)
 
                     runs = temp.times.length;
-                    if(widget){
-                        for (i = 0; i < bestIndices.length; i++) {
-                            temp.times = bestTime(temp.times, bestIndices[i], widget);
-                        }
-                    }
+                    // if(widget){
+                    //     for (i = 0; i < bestIndices.length; i++) {
+                    //         temp.times = bestTime(temp.times, bestIndices[i], widget);
+                    //     }
+                    // }
 
                     if(temp.index[temp.index.length - 1] == "L"){
                         temp.index = temp.index.slice(0, -1); 
@@ -921,9 +1031,6 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                             temp.pax = String((bestRawTime * paxIndex[temp.class]).toFixed(3));
                         }
                     }
-
-
-                    temp.times = beautifyTimes(temp.times, -1, widget)
 
                     if (!results.hasOwnProperty(temp.class)) {
                         ;
@@ -995,16 +1102,16 @@ function new_results(widget) {
     }
 
     return {
-        "1":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "1",  "raw": "" },
-        "2":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "2",  "raw": "" },
-        "3":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "3",  "raw": "" },
-        "4":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "4",  "raw": "" },
-        "5":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "5",  "raw": "" },
-        "6":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "6",  "raw": "" },
-        "7":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "7",  "raw": "" },
-        "8":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "8",  "raw": "" },
-        "9":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "9",  "raw": "" },
-        "10": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": " ", "offset": " ", "times": " ", "position": "10", "raw": "" },
+        "1":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": "", "offset": " ", "times": " ", "position": "1",  "raw": "" },
+        "2":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": "", "offset": " ", "times": " ", "position": "2",  "raw": "" },
+        "3":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": "", "offset": " ", "times": " ", "position": "3",  "raw": "" },
+        "4":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": "", "offset": " ", "times": " ", "position": "4",  "raw": "" },
+        "5":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": "", "offset": " ", "times": " ", "position": "5",  "raw": "" },
+        "6":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": "", "offset": " ", "times": " ", "position": "6",  "raw": "" },
+        "7":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": "", "offset": " ", "times": " ", "position": "7",  "raw": "" },
+        "8":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": "", "offset": " ", "times": " ", "position": "8",  "raw": "" },
+        "9":  { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": "", "offset": " ", "times": " ", "position": "9",  "raw": "" },
+        "10": { "driver": " ", "car": " ", "index": " ", "number": " ", "pax": "", "offset": " ", "times": " ", "position": "10", "raw": "" },
     }
 }
 
@@ -1162,6 +1269,16 @@ function findBestTimeIndex(times) {
 function reset_stats() {
     event_stats = {};
     recent_runs = {};
+    last_api_call = {};
+    last_params = {};
+    
+    // Clear all active timers
+    for (const region in region_timers) {
+        if (region_timers[region] && region_timers[region].timer) {
+            clearInterval(region_timers[region].timer);
+        }
+    }
+    region_timers = {};
 }
 
 // Function to update the most recent runs
@@ -1415,8 +1532,8 @@ async function getProntoClasses(url, offset, only=false) {
         const linksArray = [];
 
         if(only){
-            linksArray.push("PAX");
-            linksArray.push("RAW");
+            linksArray.push("Pax");
+            linksArray.push("Raw");
         }
 
         // Select all <a> elements within the targeted table
@@ -1450,14 +1567,14 @@ function errorCode(error, widget, type = "string", res = undefined) {
             results["1"].driver = err[0];
             results["1"].number = error.response ? error.response.status : '-1';
             results["1"].times = err[1];
-            results["1"].color = color_downPos;
+            results["1"].car = "Error";
             return results;
         }
         else {
             results = new_results(true);
             results["1"].driver = error;
             results["1"].number = 500;
-            results["1"].color = color_downPos;
+            results["1"].car = "Error";
             return results;
         }
     }

@@ -1,3 +1,4 @@
+
 // TODO maybe get from server?
 tourEvents = ["TOUR", "PRO"]
 tourNames = {
@@ -9,9 +10,21 @@ g_class = undefined;
 g_cclasses = undefined;
 g_tour = undefined;
 
+g_resultsPrev = undefined;
+g_resultsCur = {};
+
+g_timeType = "Pax";
+g_offsetType = "Prev";
+
+g_data = undefined;
+
 // Array to store recent drivers (max 6)
 const recentDrivers = [];
 const MAX_RECENT_DRIVERS = 6;
+
+const BLUE = "#4d75eb";
+const RED = "#ff0000";
+const GREEN = "#0ec41d";
 
 const tourClasses = {
     "Street": ["SS", "AS", "BS", "CS", "DS", "ES", "FS", "GS", "HS"],
@@ -60,82 +73,196 @@ async function loop() {
         }
     }
 
-    console.log(g_class);
-    
-    // Fetch recent drivers
-    if (region) {
-        fetchRecentDrivers().catch(error => {
-            console.error('Error fetching recent drivers:', error);
-        });
-    }
-    
     getResults(g_class).then(data => {
-        // populate grid here
-        const gridContainer = document.querySelector('.grid-container');
-        if (!gridContainer) return;
+ 
+        g_data = data;
+        populateGrid(data)
 
-        // Loop through positions 1-10
-        for (let i = 1; i <= 10; i++) {
-            const position = i.toString();
-            const gridItem = document.getElementById(position);
-            
-            if (gridItem && data[position]) {
-                // Update driver information
-                const driverRow = gridItem.querySelector('.driver-row');
-                const positionSpan = driverRow.querySelector('.position');
-                const numberSpan = driverRow.querySelector('.number');
-                const driverSpan = driverRow.querySelector('.driver');
-                
-                positionSpan.textContent = position;
-                numberSpan.textContent = data[position].number || '';
-                driverSpan.textContent = data[position].driver || '';
-                
-                // Update car information
-                const carRow = gridItem.querySelector('.car-row');
-                const indexSpan = carRow.querySelector('.index');
-                const carSpan = carRow.querySelector('.car');
-                
-                indexSpan.textContent = data[position].index || '';
-                carSpan.textContent = data[position].car || '';
-                
-                // Update PAX time
-                const paxRow = gridItem.querySelector('.pax-row');
-                const paxSpan = paxRow.querySelector('.pax');
-                
-                paxSpan.textContent = data[position].pax || '';
-                
-                // Update offset
-                const offsetRow = gridItem.querySelector('.offset-row');
-                const offsetSpan = offsetRow.querySelector('.offset');
-                
-                offsetSpan.textContent = data[position].offset || '';
-                
-                // Update times
-                const timesRow = gridItem.querySelector('.times-row');
-                const timesSpan = timesRow.querySelector('.times');
-                timesSpan.textContent = '';
-
-                for(j = data[position].times.length - 6; j < data[position].times.length; j++) {
-                    time = data[position].times[j];
-                    if(time != undefined && time != "") {
-                        cones = time.split("+")[1] ? "+<span class='cone'>" + time.split("+")[1] + "</span>" : "";
-                        time = time.split("+")[0]
-                        if(j == data[position].rawidx) {
-                            timesSpan.innerHTML += '<span class="tab best-time"><b>'+time+cones+'</b></span>';
-                        }
-                        else {
-                            if(time != undefined && time.trim() != "") {
-                                timesSpan.innerHTML += '<span class="tab">'+time+cones+'</span>';
-                            }
-                        }
-                    }
-                }
-            }
+        // Fetch recent drivers
+        if (region) {
+            fetchRecentDrivers().catch(error => {
+                console.error('Error fetching recent drivers:', error);
+            });
         }
 
     }).catch(error => {
         console.error('Error fetching results:', error); // Handle any errors from `getResults`
     });
+}
+
+gridLock = false;
+async function populateGrid(data) {
+    
+    i = 0;
+    while(gridLock) {
+        await sleep(10000);
+        i++;
+        if(i > 100) {
+            return;
+        }
+    }
+    gridLock = true;
+
+    const gridContainer = document.querySelector('.grid-container');
+    if (!gridContainer) return;
+
+    error = false;
+    if (data == undefined || data == null) {
+        data = {
+            "1": {
+                "number": "-1",
+                "driver": "No Results Received",
+                "index": "",
+                "car": "Fetch Error"
+            }
+        }
+        error = true;
+    }
+    else if (data.car && data.car == "Error") {
+        error = true;
+    }
+    else {
+        if (g_resultsCur != {}){
+            // copy g_resultsCur to g_resultsPrev
+            g_resultsPrev = JSON.parse(JSON.stringify(g_resultsCur));
+        }
+    }
+
+    // Loop through positions 1-10
+    for (let i = 1; i <= 10; i++) {
+        const position = i.toString();
+        const gridItem = document.getElementById(position);
+        color = "white";
+        if (gridItem && data[position]) {
+
+            if (!error && (data[position].driver != undefined && data[position].driver != "")) {
+                g_resultsCur[data[position].driver] = {
+                    "position": position,
+                    "runs": data[position].times.length,
+                }
+
+                rCurrent = g_resultsCur[data[position].driver];
+                rPrev = g_resultsPrev[data[position].driver];
+                if (rPrev != undefined) {
+                    if (rCurrent.runs > rPrev.runs) {
+                        // new run
+                        color = BLUE;
+                    }
+
+                    if (parseInt(rCurrent.position) < parseInt(rPrev.position)) {
+                        // up position
+                        color = GREEN;
+                    }
+                    else if (parseInt(rCurrent.position) > parseInt(rPrev.position)) {
+                        // down position
+                        color = RED;
+                    }
+                }
+                // make sure g_resultsPrev is not empty
+                else if (g_resultsPrev != undefined &&  Object.keys(g_resultsPrev).length != 0) {
+                    // new driver into top 10
+                    color = GREEN;
+                }
+            }
+
+            // Update driver information
+            const driverRow = gridItem.querySelector('.driver-row');
+            const positionSpan = driverRow.querySelector('.position');
+            const numberSpan = driverRow.querySelector('.number');
+            const driverSpan = driverRow.querySelector('.driver');
+
+            positionSpan.textContent = position;
+            numberSpan.textContent = data[position].number || '';
+            driverSpan.textContent = data[position].driver || '';
+            driverSpan.style.color = color;
+
+            // Update car information
+            const carRow = gridItem.querySelector('.car-row');
+            const indexSpan = carRow.querySelector('.index');
+            const carSpan = carRow.querySelector('.car');
+
+            indexSpan.textContent = data[position].index || '';
+            carSpan.textContent = data[position].car || '';
+
+            // Update PAX time
+            const paxRow = gridItem.querySelector('.pax-row');
+            const paxSpan = paxRow.querySelector('.pax');
+            // Update offset
+            const offsetRow = gridItem.querySelector('.offset-row');
+            const offsetSpan = offsetRow.querySelector('.offset');
+
+
+            if (g_timeType == "Pax" && g_offsetType == "Prev") {
+                paxSpan.textContent = data[position].pax || '';
+                offsetSpan.textContent = data[position].offset || '';
+            }
+            else if (g_timeType == "Pax" && g_offsetType == "First") {
+                if (position == "1" && data[position].pax != "" && data[position].pax != "DNS") {
+                    paxSpan.textContent = data[position].pax || '';
+                    offsetSpan.textContent = data[position].offset || '';
+                }
+                else if (data[position].pax != "" && data[position].pax != "DNS" && data["1"].pax != "") {
+                    paxSpan.textContent = data[position].pax || '';
+                    offsetSpan.textContent = "+" + (data[position].pax - data["1"].pax).toFixed(3) || '';
+                }
+                else {
+                    paxSpan.textContent = '';
+                    offsetSpan.textContent = '';
+                }
+            }
+            else if (g_timeType == "Raw" && g_offsetType == "Prev") {
+                if (position == "1" && data[position].raw != "" && data[position].pax != "DNS") {
+                    paxSpan.textContent = data[position].raw || '';
+                    offsetSpan.textContent = data[position].offset || '';
+                }
+
+                else if (data[position].raw != "" && data[position].pax != "DNS" && data["1"].pax != "") {
+                    paxSpan.textContent = data[position].raw || '';
+                    offsetSpan.textContent = "+" + (data[position].raw - data[String(parseInt(position)-1)].raw).toFixed(3) || '';
+                }
+                else {
+                    paxSpan.textContent = '';
+                    offsetSpan.textContent = '';
+                }
+            }
+            else if (g_timeType == "Raw" && g_offsetType == "First") {
+                if (position == "1" && data[position].raw != "" && data[position].pax != "DNS") {
+                    paxSpan.textContent = data[position].raw || '';
+                    offsetSpan.textContent = data[position].offset || '';
+                }
+                else if (data[position].raw != "" && data[position].pax != "DNS" && data["1"].pax != "") {
+                    paxSpan.textContent = data[position].raw || '';
+                    offsetSpan.textContent = "+" + (data[position].raw - data["1"].raw).toFixed(3) || '';
+                }
+                else {
+                    paxSpan.textContent = '';
+                    offsetSpan.textContent = '';
+                }
+            }
+
+            // Update times
+            const timesRow = gridItem.querySelector('.times-row');
+            const timesSpan = timesRow.querySelector('.times');
+            timesSpan.textContent = '';
+
+            for(j = data[position].times.length - 6; j < data[position].times.length; j++) {
+                time = data[position].times[j];
+                if(time != undefined && time != "") {
+                    cones = time.split("+")[1] ? "+<span class='cone'>" + time.split("+")[1] + "</span>" : "";
+                    time = time.split("+")[0]
+                    if(j == data[position].rawidx) {
+                        timesSpan.innerHTML += '<span class="tab best-time"><b>'+time+cones+'</b></span>';
+                    }
+                    else {
+                        if(time != undefined && time.trim() != "") {
+                            timesSpan.innerHTML += '<span class="tab">'+time+cones+'</span>';
+                        }
+                    }
+                }
+            }
+        }
+    }
+    gridLock = false;
 }
 
 // Function to fetch recent drivers from the server
@@ -145,11 +272,11 @@ async function fetchRecentDrivers() {
         if (data && Array.isArray(data)) {
             // Clear the current array
             recentDrivers.length = 0;
-            
+
             // Add each driver from the server data
             data.forEach(driver => {
                 // Format the time display
-                let timeDisplay = `${driver.runs} runs`;
+                let timeDisplay = '';
                 if (driver.time) {
                     // Check if it's a valid time format (e.g., "30.123")
                     if (!isNaN(parseFloat(driver.time))) {
@@ -158,7 +285,7 @@ async function fetchRecentDrivers() {
                         timeDisplay = driver.time; // It's some other non-empty string
                     }
                 }
-                
+
                 recentDrivers.push({
                     number: driver.number || '', // Use the driver number from the server
                     name: driver.driver,
@@ -166,10 +293,8 @@ async function fetchRecentDrivers() {
                 });
             });
 
-            console.log('Recent drivers fetched successfully:', recentDrivers);
-            
             // Update the display
-            updateRecentDriversDisplay();
+            updateRecentDriversDisplay(recentDrivers.length == 0);
         }
     } catch (error) {
         console.error('Error fetching recent drivers:', error);
@@ -177,64 +302,69 @@ async function fetchRecentDrivers() {
 }
 
 // Function to update the recent drivers display
-function updateRecentDriversDisplay() {
+function updateRecentDriversDisplay(nodata = false) {
     const container = document.getElementById('recent-drivers-list');
     if (!container) return;
-    
+
     // Clear the container
     container.innerHTML = '';
-    
+
     // Always create 6 cells
     for (let i = 0; i < MAX_RECENT_DRIVERS; i++) {
         const driverItem = document.createElement('div');
         driverItem.className = 'recent-driver-item';
-        
+
         // If we have data for this position, fill it
         if (i < recentDrivers.length) {
             const driver = recentDrivers[i];
-            
+
             const driverInfo = document.createElement('div');
-            
+
             const numberSpan = document.createElement('span');
             numberSpan.className = 'recent-driver-number';
             numberSpan.textContent = driver.number;
-            
+
             const nameSpan = document.createElement('span');
             nameSpan.className = 'recent-driver-name';
             nameSpan.textContent = driver.name;
-            
+
             driverInfo.appendChild(numberSpan);
             driverInfo.appendChild(nameSpan);
-            
+
             const timeDiv = document.createElement('div');
             timeDiv.className = 'recent-driver-time';
             timeDiv.textContent = driver.time;
-            
+
             driverItem.appendChild(driverInfo);
             driverItem.appendChild(timeDiv);
         } else {
             // Create empty cell with placeholder structure
             const driverInfo = document.createElement('div');
-            
+
             const numberSpan = document.createElement('span');
             numberSpan.className = 'recent-driver-number';
             numberSpan.textContent = '';
-            
+
             const nameSpan = document.createElement('span');
             nameSpan.className = 'recent-driver-name';
             nameSpan.textContent = '';
-            
+
             driverInfo.appendChild(numberSpan);
             driverInfo.appendChild(nameSpan);
-            
+
             const timeDiv = document.createElement('div');
             timeDiv.className = 'recent-driver-time';
             timeDiv.textContent = '';
-            
+
             driverItem.appendChild(driverInfo);
             driverItem.appendChild(timeDiv);
+
+            if(nodata && i == 0) {
+                numberSpan.textContent = "No Recent Drivers";
+            }
+
         }
-        
+
         container.appendChild(driverItem);
     }
 }
@@ -251,15 +381,15 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (false && tour) {
         getEvents(region).then(events => {
-            console.log("Tour event", events);
+            log("Tour event", events);
             if (events.length > 1) {
                 document.getElementById("eventForm").style.display = "block";
                 document.getElementById("inputBox").placeholder = "Event Name";
-                
+
                 // Populate dropdown with event options
                 const dropdown = document.getElementById('eventDropdown');
                 dropdown.innerHTML = ''; // Clear existing options
-                
+
                 events.forEach(event => {
                     const item = document.createElement('div');
                     item.className = 'dropdown-item';
@@ -270,14 +400,14 @@ document.addEventListener("DOMContentLoaded", function () {
                     });
                     dropdown.appendChild(item);
                 });
-                
+
                 // Add input event listener to filter dropdown options
                 const inputBox = document.getElementById('inputBox');
-                
+
                 inputBox.addEventListener('input', function() {
                     const filterValue = this.value.toLowerCase();
                     const items = dropdown.getElementsByClassName('dropdown-item');
-                    
+
                     for (let i = 0; i < items.length; i++) {
                         const text = items[i].textContent.toLowerCase();
                         if (text.includes(filterValue)) {
@@ -287,12 +417,12 @@ document.addEventListener("DOMContentLoaded", function () {
                         }
                     }
                 });
-                
+
                 // Show dropdown when input is focused
                 inputBox.addEventListener('focus', function() {
                     dropdown.style.display = 'block';
                 });
-                
+
                 return;
             }
         });
@@ -310,8 +440,14 @@ document.addEventListener("DOMContentLoaded", function () {
             classes.shift();
         }
 
-        classes.unshift("Pax");
-        classes.unshift("Raw");
+        log("Classes", classes);
+        if (!classes.includes("Pax")) {
+            classes.unshift("Pax");
+        }
+        if (!classes.includes("Raw")) {
+            classes.unshift("Raw");
+        }
+
 
         setClasses(cclass, classes, tour, true);
 
@@ -326,29 +462,27 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 });
 
-// Variables to track current time and offset state
-let currentTimeMode = 'Pax'; // 'PAX' or 'RAW'
-let currentOffsetMode = 'Prev'; // 'PREV' or 'FIRST'
-
 // Function to toggle between PAX and RAW time display
 function toggleTime() {
-    currentTimeMode = currentTimeMode === 'Pax' ? 'Raw' : 'Pax';
-    document.getElementById('toggle-time').textContent = currentTimeMode;
-    console.log(`Time mode changed to ${currentTimeMode}`);
-    // Here you would update the display based on the new time mode
+    g_timeType = g_timeType === 'Pax' ? 'Raw' : 'Pax';
+    document.getElementById('toggle-time').textContent = g_timeType;
+    log(`Time mode changed to ${g_timeType}`);
+
+    populateGrid(g_data);
 }
 
 // Function to toggle between PREV and FIRST offset reference
 function toggleOffset() {
-    currentOffsetMode = currentOffsetMode === 'Prev' ? 'First' : 'Prev';
-    document.getElementById('toggle-offset').textContent = currentOffsetMode;
-    console.log(`Offset mode changed to ${currentOffsetMode}`);
-    // Here you would update the display based on the new offset mode
+    g_offsetType = g_offsetType === 'Prev' ? 'First' : 'Prev';
+    document.getElementById('toggle-offset').textContent = g_offsetType;
+    log(`Offset mode changed to ${g_offsetType}`);
+
+    populateGrid(g_data);
 }
 
 // Function to handle back button click
 function goBack() {
-    console.log("Going back to widget UI...");
+    log("Going back to widget UI...");
     // Extract the base URL (protocol + hostname + port)
     const baseUrl = window.location.protocol + "//" + window.location.host;
     // Navigate to the widget UI
@@ -366,6 +500,8 @@ function toggleURL(add = "pax") {
         return;
     }
 
+    g_resultsPrev = undefined;
+    g_resultsCur = {};
     archive = pathParts[0] == "archive" ? true : false
     if (pathParts.includes(add)) {
         // Remove 'pax' from the path
@@ -423,15 +559,15 @@ function getRegion() {
     }
 
     if (!isTour && !isArchive) {
-        return { 
-            region: pathParts[1].toUpperCase(), 
+        return {
+            region: pathParts[1].toUpperCase(),
             regionName: isTour ? tourNames[pathParts[1].toUpperCase()] : pathParts[1].toUpperCase(),
             isTour: isTour
         };
-    } 
+    }
     else if(isArchive) {
-        return { 
-            region: "archive/" + pathParts[2].toUpperCase() + "/" + pathParts[3].toUpperCase(), 
+        return {
+            region: "archive/" + pathParts[2].toUpperCase() + "/" + pathParts[3].toUpperCase(),
             regionName: isTour ? tourNames[pathParts[3].toUpperCase()] : pathParts[3].toUpperCase(),
             isTour: isTour
         };
@@ -442,13 +578,13 @@ function getRegion() {
         // there is a class at regionTry
         if(regionTry && regionTry.length < 5) {
             return {
-                region: pathParts[1].toUpperCase(), 
+                region: pathParts[1].toUpperCase(),
                 regionName: isTour ? tourNames[pathParts[1].toUpperCase()] : pathParts[1].toUpperCase(),
                 isTour: true
             };
         }
         return {
-            region: pathParts[1].toUpperCase() + (regionTry ? "/" + regionTry : ""), 
+            region: pathParts[1].toUpperCase() + (regionTry ? "/" + regionTry : ""),
             regionName: (regionTry ? ( pathParts[2].toUpperCase()) + " ": "") + tourNames[pathParts[1].toUpperCase()],
             isTour: true
         };
@@ -459,7 +595,6 @@ async function getData(path) {
     try {
         const response = await fetch(path);
         const data = await response.json();
-        console.log('Data fetched successfully:', data);
         return data; // Data is returned here
     } catch (error) {
         console.error('Error fetching data:', error);
@@ -494,7 +629,7 @@ function setClasses(cclass, classes, tour = false, create = false) {
 
             const buttonBox = document.createElement('div');
             buttonBox.className = 'button-box';
-            
+
             used = false;
 
             tourClasses[category].forEach(label => {
@@ -512,7 +647,7 @@ function setClasses(cclass, classes, tour = false, create = false) {
                         button.style.backgroundColor = "#ff0000";
                     }
 
-                    
+
                     // Append the button to the container
                     buttonBox.appendChild(button);
                 }
@@ -536,7 +671,7 @@ function setClasses(cclass, classes, tour = false, create = false) {
             button.innerHTML = label;
             // Set an onclick handler that navigates to a specific location
             button.onclick = () => toggleURL(label);
-            
+
             if(label.toUpperCase() == cclass.toUpperCase()) {
                 button.style.backgroundColor = "#ff0000";
                 g_class = label;
@@ -548,13 +683,11 @@ function setClasses(cclass, classes, tour = false, create = false) {
         buttonContainer.style.display = "flex";
     }
     else {
-        console.log("Setting classes")
         // loop through buttons
         const buttons = buttonContainer.getElementsByTagName('button');
         for (let i = 0; i < buttons.length; i++) {
             const button = buttons[i];
             if (button.innerHTML == cclass) {
-                console.log("here", button.innerHTML, cclass)
                 button.style.backgroundColor = "#ff0000";
 
                 if (g_class != cclass) {

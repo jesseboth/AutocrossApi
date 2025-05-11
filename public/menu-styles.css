@@ -4,6 +4,11 @@ body {
   font-family: Arial, sans-serif;
   background-color: #e6e6e8;
 }
+.dark{
+  background-color: #0e0e0e;
+  color: #a7a7a7;
+}
+
 .container {
   padding: 20px;
 }
