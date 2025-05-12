@@ -9,6 +9,7 @@ tourNames = {
 g_class = undefined;
 g_cclasses = undefined;
 g_tour = undefined;
+g_paxIndex = undefined;
 
 g_resultsPrev = undefined;
 g_resultsCur = {};
@@ -26,18 +27,6 @@ const BLUE = "#4d75eb";
 const RED = "#ff0000";
 const GREEN = "#0ec41d";
 
-const tourClasses = {
-    "Street": ["SS", "AS", "BS", "CS", "DS", "ES", "FS", "GS", "HS"],
-    "Street Touring (old)": ["STH", "STS", "STX", "STU", "STR"],
-    "Street Touring": ["GST", "DST", "CST", "BST", "AST", "SST", "SSC", "EVX"],
-    "Street Prep": ["SSP", "CSP", "DSP", "ESP", "FSP", "LS"],
-    "Index": ["S1", "S3", "S4", "S5"],
-    "Spec": ["XP", "CP", "DP", "EP", "FP", "CSM"],
-    "Race Tire": ["R1", "R2", "R3"],
-    "Street Mod": ["SM", "SSM", "SMF", "XA", "XB", "XU", "CAM", "CAMC", "CAMT", "CAMS"],
-    "Modified": ["AM", "BM", "CM", "DM", "EM", "FM", "KM", "FSAE"],
-    "Ladies": ["L1", "L2", "L3", "L4"]
-};
 region = undefined;
 let setup = false;
 
@@ -74,7 +63,7 @@ async function loop() {
     }
 
     getResults(g_class).then(data => {
- 
+
         g_data = data;
         populateGrid(data)
 
@@ -92,7 +81,7 @@ async function loop() {
 
 gridLock = false;
 async function populateGrid(data) {
-    
+
     i = 0;
     while(gridLock) {
         await sleep(10000);
@@ -102,6 +91,8 @@ async function populateGrid(data) {
         }
     }
     gridLock = true;
+
+    log("Populating grid with data:", data);
 
     const gridContainer = document.querySelector('.grid-container');
     if (!gridContainer) return;
@@ -194,7 +185,12 @@ async function populateGrid(data) {
 
             if (g_timeType == "Pax" && g_offsetType == "Prev") {
                 paxSpan.textContent = data[position].pax || '';
-                offsetSpan.textContent = data[position].offset || '';
+                if (position != "1" && data[position].pax != "" && data[position].pax != "DNS") {
+                    offsetSpan.textContent = "+"+data[position].offset || '';
+                }
+                else {
+                    offsetSpan.textContent = data[position].offset || '';
+                }
             }
             else if (g_timeType == "Pax" && g_offsetType == "First") {
                 if (position == "1" && data[position].pax != "" && data[position].pax != "DNS") {
@@ -215,10 +211,37 @@ async function populateGrid(data) {
                     paxSpan.textContent = data[position].raw || '';
                     offsetSpan.textContent = data[position].offset || '';
                 }
-
                 else if (data[position].raw != "" && data[position].pax != "DNS" && data["1"].pax != "") {
                     paxSpan.textContent = data[position].raw || '';
-                    offsetSpan.textContent = "+" + (data[position].raw - data[String(parseInt(position)-1)].raw).toFixed(3) || '';
+
+                    const prevPosition = String(parseInt(position)-1);
+
+                    // Use paxIndex to calculate the offset if available
+                    if (g_paxIndex && data[position].index && data[prevPosition].index) {
+                        // Get the PAX index for current and previous positions
+                        const currIndex = parseFloat(g_paxIndex[data[position].index]) || 1;
+                        const prevIndex = parseFloat(g_paxIndex[data[prevPosition].index]) || 1;
+
+                        if (!isNaN(currIndex) && !isNaN(prevIndex)) {
+                            // Calculate the PAX time for the previous position
+                            const prevPaxTime = parseFloat(data[prevPosition].raw) * prevIndex;
+
+                            // Calculate what raw time would be needed to match the previous car's PAX time
+                            const neededRaw = prevPaxTime / currIndex;
+
+                            // Calculate the offset between actual raw time and needed raw time
+                            const actualRaw = parseFloat(data[position].raw);
+                            const offset = actualRaw - neededRaw;
+
+                            offsetSpan.textContent = "+" + offset.toFixed(3);
+                        } else {
+                            // Fallback to direct raw time comparison if PAX indices are not valid
+                            offsetSpan.textContent = "+" + (data[position].raw - data[prevPosition].raw).toFixed(3) || '';
+                        }
+                    } else {
+                        // Fallback to direct raw time comparison if paxIndex not available
+                        offsetSpan.textContent = "+" + (data[position].raw - data[prevPosition].raw).toFixed(3) || '';
+                    }
                 }
                 else {
                     paxSpan.textContent = '';
@@ -232,7 +255,33 @@ async function populateGrid(data) {
                 }
                 else if (data[position].raw != "" && data[position].pax != "DNS" && data["1"].pax != "") {
                     paxSpan.textContent = data[position].raw || '';
-                    offsetSpan.textContent = "+" + (data[position].raw - data["1"].raw).toFixed(3) || '';
+
+                    // Use paxIndex to calculate the offset if available
+                    if (g_paxIndex && data[position].index && data["1"].index) {
+                        // Get the PAX index for current and first positions
+                        const currIndex = parseFloat(g_paxIndex[data[position].index]) || 1;
+                        const firstIndex = parseFloat(g_paxIndex[data["1"].index]) || 1;
+
+                        if (!isNaN(currIndex) && !isNaN(firstIndex)) {
+                            // Calculate the PAX time for the first position
+                            const firstPaxTime = parseFloat(data["1"].raw) * firstIndex;
+
+                            // Calculate what raw time would be needed to match the first car's PAX time
+                            const neededRaw = firstPaxTime / currIndex;
+
+                            // Calculate the offset between actual raw time and needed raw time
+                            const actualRaw = parseFloat(data[position].raw);
+                            const offset = actualRaw - neededRaw;
+
+                            offsetSpan.textContent = "+" + offset.toFixed(3);
+                        } else {
+                            // Fallback to direct raw time comparison if PAX indices are not valid
+                            offsetSpan.textContent = "+" + (data[position].raw - data["1"].raw).toFixed(3) || '';
+                        }
+                    } else {
+                        // Fallback to direct raw time comparison if paxIndex not available
+                        offsetSpan.textContent = "+" + (data[position].raw - data["1"].raw).toFixed(3) || '';
+                    }
                 }
                 else {
                     paxSpan.textContent = '';
@@ -245,6 +294,9 @@ async function populateGrid(data) {
             const timesSpan = timesRow.querySelector('.times');
             timesSpan.textContent = '';
 
+            if(error) {
+                return;
+            }
             for(j = data[position].times.length - 6; j < data[position].times.length; j++) {
                 time = data[position].times[j];
                 if(time != undefined && time != "") {
@@ -268,6 +320,7 @@ async function populateGrid(data) {
 // Function to fetch recent drivers from the server
 async function fetchRecentDrivers() {
     try {
+        log("recent", region);
         const data = await getData(`/${region}/recent`);
         if (data && Array.isArray(data)) {
             // Clear the current array
@@ -299,6 +352,13 @@ async function fetchRecentDrivers() {
     } catch (error) {
         console.error('Error fetching recent drivers:', error);
     }
+}
+
+function fetchPaxIndex() {
+    getData(`/paxIndex`).then(data => {
+        log("PAX Index", data);
+        g_paxIndex = data
+    });
 }
 
 // Function to update the recent drivers display
@@ -378,6 +438,9 @@ document.addEventListener("DOMContentLoaded", function () {
     regionData = getRegion();
     region = regionData.region;
     tour = regionData.isTour;
+
+    // Fetch PAX index data
+    fetchPaxIndex();
 
     if (false && tour) {
         getEvents(region).then(events => {
@@ -493,6 +556,7 @@ function toggleURL(add = "pax") {
     const currentURL = window.location.href;
     const url = new URL(currentURL);
 
+
     // Get the current pathname without hash or query parameters
     let pathParts = url.pathname.split('/').filter(part => part !== ''); // Remove empty parts
     oldcclass = pathParts[pathParts.length - 1];
@@ -522,7 +586,7 @@ function toggleURL(add = "pax") {
     url.hash = '';
 
     // set window url but don't refresh
-
+    log("Toggling URL to:", add, url.toString());
     window.history.pushState({}, '', url.toString());
     setClasses(add, g_cclasses, g_tour);
 }
@@ -691,10 +755,10 @@ function setClasses(cclass, classes, tour = false, create = false) {
                 button.style.backgroundColor = "#ff0000";
 
                 if (g_class != cclass) {
+                    g_class = cclass;
                     refreshLoop();
                 }
 
-                g_class = cclass;
             }
             else {
                 button.style.backgroundColor = "";
@@ -713,6 +777,7 @@ async function getResults(cclass = "") {
         }
     }
     path = newPath.join('/');
+
     return await getData('/widget/' + path + '/' + cclass);
 }
 

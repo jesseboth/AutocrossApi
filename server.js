@@ -83,26 +83,26 @@ function startRegionTimer(region_name, region_dict, cclass, widget, user_driver,
         uuid,
         software
     };
-    
+
     // Clear any existing timer for this region
     if (region_timers[region_name]) {
         clearInterval(region_timers[region_name].timer);
     }
-    
+
     // Set the start time
     const startTime = Date.now();
-    
+
     // Create a new timer
     const timer = setInterval(() => {
         const currentTime = Date.now();
-        
+
         // If it's been more than an hour since the timer started, stop it
         if (currentTime - startTime > RESET_TIMEOUT) {
             clearInterval(timer);
             delete region_timers[region_name];
             return;
         }
-        
+
         // Call the appropriate function with the stored parameters
         if (software === 'axware') {
             axware(region_name, region_dict, cclass, widget, user_driver, uuid)
@@ -112,7 +112,7 @@ function startRegionTimer(region_name, region_dict, cclass, widget, user_driver,
                 .catch(error => console.error(`Error refreshing pronto data for ${region_name}:`, error));
         }
     }, TIMER_INTERVAL);
-    
+
     // Store the timer and start time
     region_timers[region_name] = {
         timer,
@@ -153,6 +153,10 @@ app.get('/debug', async (req, res) => {
     }
 });
 
+app.get('/paxIndex', async (req, res) => {
+    res.json(paxIndex);
+});
+
 
 app.use('/archive', express.static("archive")); // Serve static files from the archive directory
 
@@ -179,17 +183,17 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
         for (let dir of dirs) {
             // Create a container for each directory
             const dirId = `dir-${dir.replace(/\s+/g, '-')}`; // Unique ID for each directory
-            
+
             // Add a clickable heading for each directory
             html += `
             <li>
                 <a style="width: 65%" onclick="toggleVisibility('${dirId}')">${dir}</a>
             </li>
-        `; 
-            
+        `;
+
             // Add a hidden unordered list to group the files under this directory
             html += `<ul id="${dirId}" class="file-list" style="display: none;">`;
-            
+
             let years = await fsp.readdir(`archive/${dir}`);
             for (let year of years) {
                 const yearId = `${dirId}-${year.replace(/\s+/g, '-')}`;
@@ -213,7 +217,7 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
                 }
                 html += `</ul>`;
             }
-            
+
 
             // let files = await fsp.readdir(`archive/${dir}`);
             // for (let file of files) {
@@ -226,7 +230,7 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
             //         `;
             //     }
             // }
-            
+
             // Close the unordered list
             html += `</ul>`;
         }
@@ -478,7 +482,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
                     // parse out the event code
                     code = redirect.split("/")
                     res.json([code[3]])
-                    return 
+                    return
                 }
             }
         }
@@ -498,7 +502,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
                     // parse out the event code
                     code = redirect.split("/")
                     res.json([code[3]])
-                    return 
+                    return
                 }
             }
         }
@@ -539,8 +543,15 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
                 res.json([]);
             }
             return;
+        } else if (tour && req.params.c && req.params.c.toLowerCase() === "recent") {
+            if (recent_runs[region]) {
+                res.json(recent_runs[region]);
+            } else {
+                res.json([]);
+            }
+            return;
         }
-    
+
         if (!tour && !regions.hasOwnProperty(region)) {
             res.status(500).send(errorCode("Region not found", widget));
             return;
@@ -598,15 +609,15 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
     // Update the last API call time
     const currentTime = Date.now();
     last_api_call[region_name] = currentTime;
-    
+
     // Reset recent runs if this is a new session
     if (!recent_runs[region_name]) {
         recent_runs[region_name] = [];
     }
-    
+
     // Start or reset the timer for this region
     startRegionTimer(region_name, region, cclass, widget, user_driver, uuid, 'axware');
-    
+
     const url = region.url;
 
     let stats = {}
@@ -758,7 +769,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
             else {
                 valid = true;
             }
-            
+
         };
 
         if (cclass != undefined) {
@@ -810,15 +821,15 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
     // Update the last API call time
     const currentTime = Date.now();
     last_api_call[region_name] = currentTime;
-    
+
     // Reset recent runs if this is a new session
     if (!recent_runs[region_name]) {
         recent_runs[region_name] = [];
     }
-    
+
     // Start or reset the timer for this region
     startRegionTimer(region_name, region, cclass, widget, user_driver, uuid, 'pronto');
-    
+
     let classes = [cclass];
     let backup = [];
     let doPax = false;
@@ -932,14 +943,13 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         }
                     }
                     let columns = $(parse[index]).find('td');
-                    
+
                     let execute = true;
                     if (row != carIdx[0]) {
                         // Check if the row contains a car - if it does there are not yet times listed
                         execute = !isCar($(columns[carIdx[1]]).text().trim());
-                        debug("Car: ", $(columns[carIdx[1]]).text().trim(), execute)
                     }
-                    
+
                     if (columns.length > 1 && execute) {
                         for (col = 0; col < columns.length; col++) {
                             element = format[row][col];
@@ -987,7 +997,8 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         temp.index = temp.index.slice(currentClass.length).trim();
                     }
                     if (temp.offset == undefined || temp.offset == "") { temp.offset = "-" }
-                    temp.offset = temp.offset.replace(/\(/g, '+').replace(/\)/g, '');
+                    temp.offset = temp.offset.replace(/\(/g, '').replace(/\)/g, '');
+
                     temp.pax = simplifyTime(temp.pax);
 
                     intPosition = parseInt(temp.position)
@@ -1000,7 +1011,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                     // }
 
                     if(temp.index[temp.index.length - 1] == "L"){
-                        temp.index = temp.index.slice(0, -1); 
+                        temp.index = temp.index.slice(0, -1);
                     }
 
                     if((doPax || doRaw) && region.tour) {
@@ -1022,12 +1033,33 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         }
                     }
                     else {
-                        bestIndex = findBestTimeIndex(temp.times)
-                        bestRawTime = convertToSeconds(temp.times[bestIndex]);
-                        temp.raw = String(bestRawTime.toFixed(3));
+                        if(region.tour && region_name.includes("NATS") || region_name.endsWith("NT")){
+                            const midpoint = 3;
+                            const day1 = temp.times.slice(0, midpoint);
+                            const day2 = temp.times.slice(midpoint);
+                            bestIndex = findBestTimeIndex(day1)
+                            bestIndex2 = findBestTimeIndex(day2)
+
+                            if(bestIndex == -1){
+                                bestRawTime = Infinity
+                            } else if(bestIndex2 == -1){
+                                bestRawTime = convertToSeconds(day1[bestIndex], true)
+                            }
+                            else {
+                                bestRawTime = convertToSeconds(day1[bestIndex], true) + convertToSeconds(day2[bestIndex2], true);
+                            }
+                            temp.raw = String(bestRawTime.toFixed(3));
+                        }
+                        else {
+                            bestIndex = findBestTimeIndex(temp.times)
+                            bestRawTime = convertToSeconds(temp.times[bestIndex]);
+                            temp.raw = String(bestRawTime.toFixed(3));
+                        }
+
                         if(widget && cclass == "RAW"){
                             temp.pax = String(bestRawTime.toFixed(3));
-                        } else if(bestIndex > 0 && bestRawTime == convertToSeconds(temp.pax) && paxIndex[temp.index] != undefined){
+                        }
+                        else if(bestIndex > -1 && paxIndex[temp.index] != undefined){
                             temp.pax = String((bestRawTime * paxIndex[temp.class]).toFixed(3));
                         }
                     }
@@ -1131,7 +1163,7 @@ async function archiveJson(name, region) {
     try {
         const response = await axios.get(region.url);
         const htmlContent = response.data;
-        
+
         date = "fixme-" + getYesterdate();
         const regex = /Live Results - Generated:\s*\w+ (\d{2}-\d{2}-\d{4}) \d{2}:\d{2}:\d{2}/;
         match = htmlContent.match(regex);
@@ -1156,7 +1188,7 @@ async function archiveJson(name, region) {
         fs.mkdir(filepath, { recursive: true }, (err) => {
             if (err) {
                 console.error('Error creating directories:', err);
-            } 
+            }
         });
 
         const filename = filepath + `${name}_${date}.json`;
@@ -1271,7 +1303,7 @@ function reset_stats() {
     recent_runs = {};
     last_api_call = {};
     last_params = {};
-    
+
     // Clear all active timers
     for (const region in region_timers) {
         if (region_timers[region] && region_timers[region].timer) {
@@ -1294,7 +1326,7 @@ function updateRecentRuns(region, driverName, driverNumber, runCount, lastTime) 
         runs: runCount,
         time: lastTime || '' // Store the most recent time
     });
-    
+
     // Keep only the 6 most recent runs
     if (recent_runs[region].length > 6) {
         recent_runs[region] = recent_runs[region].slice(0, 6);
@@ -1655,7 +1687,7 @@ async function fetchPaxIndex() {
                 }
                 carClass = carClass.split("(")[0].trim();
                 i++;
-                
+
                 let indexValue = ""
                 for(; i < cells.length; i++){
                     indexValue = $(cells[i]).text().trim();
@@ -1684,9 +1716,9 @@ async function fetchEventCodes(url) {
     try {
       const response = await axios.get(url);
       const $ = cheerio.load(response.data);
-  
+
       const eventCodes = [];
-  
+
       $('a[href*="index.php"]').each((_, el) => {
         const href = $(el).attr('href');
         const match = href.match(/\.\.\/([^/]+)\/index\.php/);
@@ -1694,7 +1726,7 @@ async function fetchEventCodes(url) {
           eventCodes.push(match[1]);
         }
       });
-  
+
       // Remove duplicates
       return [...new Set(eventCodes)];
     } catch (error) {
