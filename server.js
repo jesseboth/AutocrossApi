@@ -418,21 +418,73 @@ app.get(['/', '/widgetui'], async (req, res) => {
             <link rel="manifest" href="/fetch/data/manifest.json">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="/menu-styles.css">
+            <script src="/menu-script.js"></script>
         </head>
         <body class="dark">
             <div class="container">
                 <h1 class="dark">Autocross</h1>
                 <ul>
-                    ${Object.keys(regions).map(region => `
+    `;
+
+    // Add TOUR and PRO regions with event dropdowns
+    for (const region of Object.keys(regions)) {
+        if (["TOUR", "PRO"].includes(region)) {
+            // Create a unique ID for this region's dropdown
+            const regionId = `region-${region.toLowerCase()}`;
+            
+            // Add the region with a click handler to toggle the dropdown
+            html += `
+                <li>
+                    <a onclick="toggleVisibility('${regionId}')">${region}</a>
+                </li>
+            `;
+            
+            // Add a hidden list for the events
+            html += `<ul id="${regionId}" class="file-list" style="display: none;">`;
+            
+            try {
+                // Fetch events for this region
+                let redirect = await getRedirectURL(regions[region].url);
+                let events = [];
+                
+                if (redirect.includes("TwoEvents")) {
+                    events = await fetchEventCodes(redirect);
+                } else {
+                    // Parse out the event code
+                    const code = redirect.split("/");
+                    events = [code[3]];
+                }
+                
+                // Add each event as a link
+                for (const event of events) {
+                    html += `
                         <li>
-                            <a href="/widgetui/${region}/pax">${region}</a>
+                            <a href="/widgetui/${region}/${event}/Pax">${event}</a>
                         </li>
-                    `).join('')}
-                </ul>
-                <ul>
+                    `;
+                }
+            } catch (error) {
+                console.error(`Error fetching events for ${region}:`, error);
+                html += `
                     <li>
-                        <a href="/archive">Archive</a>
+                        <a href="/widgetui/${region}/pax">Error Event</a>
                     </li>
+                `;
+            }
+            
+            // Close the events list
+            html += `</ul>`;
+        } else {
+            // Regular region without dropdown
+            html += `
+                <li>
+                    <a href="/widgetui/${region}/Pax">${region}</a>
+                </li>
+            `;
+        }
+    }
+
+    html += `
                 </ul>
             </div>
         </body>

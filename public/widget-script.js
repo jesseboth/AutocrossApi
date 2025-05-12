@@ -515,7 +515,6 @@ document.addEventListener("DOMContentLoaded", function () {
         setClasses(cclass, classes, tour, true);
 
         g_cclasses = classes;
-        g_class = cclass;
         g_tour = tour;
 
         setup = true;
@@ -658,10 +657,12 @@ function getRegion() {
 async function getData(path) {
     try {
         const response = await fetch(path);
+        log(path, response);
         const data = await response.json();
-        return data; // Data is returned here
+        return data;
     } catch (error) {
         console.error('Error fetching data:', error);
+        return null;
     }
 }
 
@@ -769,6 +770,7 @@ function setClasses(cclass, classes, tour = false, create = false) {
 
 
 async function getResults(cclass = "") {
+    log("Getting results for class:", cclass);
     path = getPath();
     newPath = []
     for (let i = 0; i < path.length; i++) {
