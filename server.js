@@ -246,12 +246,132 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
 
     html += `
                 </ul>
+                
+                <!-- Search functionality -->
+                <div class="search-container">
+                    <input type="text" id="searchInput" class="search-box" placeholder="Search for a driver name...">
+                    <button id="searchButton" class="search-button">Search</button>
+                </div>
+                <div id="searchResults" class="search-results" style="display: none;">
+                    <h2>Search Results</h2>
+                    <ul id="resultsContainer"></ul>
+                </div>
             </div>
+            
+            <script>
+                document.getElementById('searchButton').addEventListener('click', function() {
+                    performSearch();
+                });
+                
+                document.getElementById('searchInput').addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        performSearch();
+                    }
+                });
+                
+                function performSearch() {
+                    const searchTerm = document.getElementById('searchInput').value.trim();
+                    if (searchTerm === '') return;
+                    
+                    const resultsContainer = document.getElementById('resultsContainer');
+                    resultsContainer.innerHTML = '<li>Searching...</li>';
+                    document.getElementById('searchResults').style.display = 'block';
+                    
+                    fetch('/archive/search?name=' + encodeURIComponent(searchTerm))
+                        .then(response => response.json())
+                        .then(data => {
+                            resultsContainer.innerHTML = '';
+                            
+                            if (data.length === 0) {
+                                resultsContainer.innerHTML = '<li>No results found</li>';
+                                return;
+                            }
+                            
+                            data.forEach(result => {
+                                const li = document.createElement('li');
+                                const a = document.createElement('a');
+                                a.href = result.url + "?highlight=" + encodeURIComponent(searchTerm);
+                                a.textContent = \`\${result.region} - \${result.event} - \${result.class} - \${result.position}. \${result.driver}\`;
+                                li.appendChild(a);
+                                resultsContainer.appendChild(li);
+                            });
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            resultsContainer.innerHTML = '<li>Error searching. Please try again.</li>';
+                        });
+                }
+            </script>
         </body>
         </html>
     `;
 
     res.send(html);
+});
+
+// Route to search through archive files
+app.get('/archive/search', async (req, res) => {
+    const searchName = req.query.name;
+    if (!searchName) {
+        return res.status(400).json({ error: 'Search name is required' });
+    }
+    
+    const searchResults = [];
+    
+    try {
+        // Get all regions
+        const regions = await fsp.readdir("archive");
+        
+        // Loop through each region
+        for (const region of regions) {
+            // Get all years for this region
+            const years = await fsp.readdir(`archive/${region}`);
+            
+            // Loop through each year
+            for (const year of years) {
+                // Get all files for this year
+                const files = await fsp.readdir(`archive/${region}/${year}`);
+                
+                // Loop through each file
+                for (const file of files) {
+                    if (file.endsWith('.json')) {
+                        const filePath = `archive/${region}/${year}/${file}`;
+                        const eventName = file.split('.')[0];
+                        
+                        // Read and parse the JSON file
+                        const fileData = getJsonData(filePath);
+                        
+                        // Search through all classes in the file
+                        for (const className in fileData) {
+                            const classData = fileData[className];
+                            
+                            // Handle both array and object formats
+                            const entries = Array.isArray(classData) ? classData : Object.values(classData);
+                            
+                            // Search for the name in each entry
+                            for (const entry of entries) {
+                                if (entry.driver && entry.driver.toLowerCase().includes(searchName.toLowerCase())) {
+                                    searchResults.push({
+                                        region: region,
+                                        event: eventName,
+                                        class: className,
+                                        position: entry.position || '',
+                                        driver: entry.driver,
+                                        url: `/archive/ui/${year}/${eventName}`
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        res.json(searchResults);
+    } catch (error) {
+        console.error('Error searching archive:', error);
+        res.status(500).json({ error: 'Error searching archive' });
+    }
 });
 
 
