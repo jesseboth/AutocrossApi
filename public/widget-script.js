@@ -65,6 +65,7 @@ async function loop() {
     getResults(g_class).then(data => {
 
         g_data = data;
+        log("Updates", data.updates)
         populateGrid(data)
 
         // Fetch recent drivers
@@ -297,6 +298,12 @@ async function populateGrid(data) {
             if(error) {
                 return;
             }
+
+            if(i == 10) {
+                const positionClass = document.getElementsByClassName("position")[i-1];
+                positionClass.textContent = data[position].position;
+            }
+
             for(j = data[position].times.length - 6; j < data[position].times.length; j++) {
                 time = data[position].times[j];
                 if(time != undefined && time != "") {
@@ -656,7 +663,13 @@ function getRegion() {
 
 async function getData(path) {
     try {
-        const response = await fetch(path);
+        // Include machine ID in the request headers
+        const machineId = getMachineId();
+        const response = await fetch(path, {
+            headers: {
+                'X-Machine-ID': machineId
+            }
+        });
         log(path, response);
         const data = await response.json();
         return data;

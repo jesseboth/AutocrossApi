@@ -438,7 +438,7 @@ function generateTableRows(entries) {
           <td nowrap align="right"></td>
           <td nowrap align="right"></td>
           <td nowrap align="left">${entry.car}</td>
-          <td nowrap>${entry.offset}</td>`;
+          <td nowrap>${entry.offset != '-' ? "+" + entry.offset: entry.offset}</td>`;
 
         for (let i = numTimes; i < numTimes * 2; i++) {
             if(i == bestTimeIndex) {

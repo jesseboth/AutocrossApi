@@ -20,10 +20,14 @@ function debug(...args) {
     }
 }
 
-// Middleware for redirection
+// Middleware for redirection and parsing JSON
 app.use((req, res, next) => {
     next();
 });
+app.use(express.json());
+
+// Store user drivers by machine ID
+const userDrivers = {};
 
 // Function to read and parse the JSON file
 const getJsonData = (filePath) => {
@@ -66,10 +70,11 @@ let last_api_call = {};
 let last_params = {};
 // Store the timers for each region
 let region_timers = {};
-// Timer to check if data should be reset (1 hour = 3600000 ms)
+
 const RESET_TIMEOUT = 3600000;
-// Timer interval (1 minute = 60000 ms)
 const TIMER_INTERVAL = 60000;
+const DNFTimes = ["DNF", "OFF", "DSQ", "RR"]
+const DNSTimes = ["DNS", "NO TIME"]
 reset_stats();
 
 // Function to start a timer for a region
@@ -157,6 +162,41 @@ app.get('/paxIndex', async (req, res) => {
     res.json(paxIndex);
 });
 
+// Route to set user driver name
+app.post('/set-user-driver', (req, res) => {
+    const { user_driver } = req.body;
+    const machineId = req.headers['x-machine-id'] || req.headers['x-device-id'] || 'default';
+    
+    if (!user_driver) {
+        return res.status(400).json({ success: false, message: 'Driver name is required' });
+    }
+    
+    // Store the user driver name by machine ID
+    // make sure user driver is valid and nothing bad
+    if (user_driver.includes("/") || user_driver.includes("\\") || user_driver.includes(".") || user_driver.includes(",")) {
+        return res.json({ success: false, message: 'Invalid Character' });
+    }
+    else if (user_driver.length > 30) {
+        return res.json({ success: false, message: 'Driver name too long' });
+    }
+    else if (user_driver.length < 3) {
+        return res.json({ success: false, message: 'Driver name too short' });
+    }
+
+    userDrivers[machineId] = user_driver;
+    debug(`Set user driver for ${machineId}: ${user_driver}`);
+    
+    return res.json({ success: true, message: 'Driver name set successfully' });
+});
+
+// Route to get user driver name
+app.get('/get-user-driver', (req, res) => {
+    const machineId = req.headers['x-machine-id'] || req.headers['x-device-id'] || 'default';
+    const driverName = userDrivers[machineId] || '';
+    
+    return res.json({ success: true, driver_name: driverName });
+});
+
 
 app.use('/archive', express.static("archive")); // Serve static files from the archive directory
 
@@ -169,6 +209,7 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="/menu-styles.css">
+            <script src="/id.js"></script>
             <script src="/menu-script.js"></script>
         </head>
         <body>
@@ -418,6 +459,7 @@ app.get(['/', '/widgetui'], async (req, res) => {
             <link rel="manifest" href="/fetch/data/manifest.json">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="/menu-styles.css">
+            <script src="/id.js"></script>
             <script src="/menu-script.js"></script>
         </head>
         <body class="dark">
@@ -610,8 +652,8 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
     let tourType = "";
     let region = "";
     let cclass = "";
-    const uuid = req.headers['x-device-id'];
-    const userDriver = req.headers['user'];
+    const uuid = req.headers['x-device-id'] || req.headers['x-machine-id'];
+    const userDriver = (userDrivers[uuid]|| req.headers['user'] || "").toLowerCase();
 
     try {
         switch (req.params.a.toUpperCase()) {
@@ -899,6 +941,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                 if (!temp.offset || temp.offset == "" || temp.offset.startsWith("[-]")) {
                     temp.offset = "-"
                 }
+                temp.offset = temp.offset.replace(/(\+)/g, '');
 
                 temp.pax = simplifyTime(temp.pax);
 
@@ -921,7 +964,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                 else if (!widget || intPosition <= 10) {
                     results[temp.class][temp.position] = { ...temp }
                 }
-                else if (temp.driver == user_driver) {
+                else if (temp.driver.toLowerCase() == user_driver) {
                     // put me in 10th if I am outisde top 10
                     temp.offset = temp.pax - results[temp.class]["9"].pax;
                     results[temp.class]["10"] = { ...temp }
@@ -936,6 +979,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                     // Update recent runs tracking
                     stats[temp.driver] = { "position": intPosition, "runs": runs }
                 }
+
                 temp = {}
             }
             else {
@@ -1243,7 +1287,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         results[temp.class][temp.position] = { ...temp }
                         results[temp.class][temp.position].class = store;
                     }
-                    else if (temp.driver == user_driver) {
+                    else if (temp.driver.toLowerCase() == user_driver) {
                         // put me in 10th if I am outisde top 10
                         temp.offset = temp.pax - results[temp.class]["9"].pax;
                         results[temp.class]["10"] = { ...temp }
@@ -1403,14 +1447,10 @@ function simplifyTime(_string) {
         return ""
     }
 
-    if (string.includes("OFF")) {
-        return "OFF"
-    }
-    else if (string.includes("DNF")) {
-        return "DNF"
-    }
-    else if (string.includes("DSQ")) {
-        return "DSQ"
+    for(let i = 0; i < DNFTimes.length; i++){
+        if (string.includes(DNFTimes[i])) {
+            return DNFTimes[i]
+        }
     }
 
     return string
@@ -1556,8 +1596,8 @@ function pax(results, widget, stats, user_driver = undefined) {
             if (i < 10) {
                 ret[(i + 1).toString()] = flattenedData[i];
             }
-            else if (flattenedData[i].driver == user_driver) {
-                flattenedData[i].offset = flattenedData[i].pax - ret["9"].pax;
+            else if (flattenedData[i].driver.toLowerCase() == user_driver) {
+                flattenedData[i].offset = (flattenedData[i].pax - ret["9"].pax).toFixed(3);
                 ret["10"] = flattenedData[i];
             }
 
@@ -1574,17 +1614,19 @@ function paxSort(data) {
     return data.sort((a, b) => {
         let stringA = a.pax.trim();
         let stringB = b.pax.trim();
-        if (stringA == "OFF" || stringA == "DNF" || stringA == "DSQ" || stringA == "") {
+
+        // check if stringA is in DNFtimes array
+        if (DNFTimes.includes(stringA)) {
             stringA = "DNF";
         }
-        if (stringB == "OFF" || stringB == "DNF" || stringB == "DSQ" || stringB == "") {
+        if (DNFTimes.includes(stringB)) {
             stringB = "DNF";
         }
 
-        if (stringA == "NO TIME") {
+        if (DNSTimes.includes(stringA)) {
             stringA = "DNS";
         }
-        if (stringB == "NO TIME") {
+        if (DNSTimes.includes(stringB)) {
             stringB = "DNS";
         }
 
@@ -1643,7 +1685,7 @@ function raw(results, widget, stats, user_driver = undefined) {
             if (i < 10) {
                 ret[(i + 1).toString()] = flattenedData[i];
             }
-            else if (flattenedData[i].driver == user_driver) {
+            else if (flattenedData[i].driver.toLowerCase() == user_driver) {
                 flattenedData[i].offset = flattenedData[i].pax - ret["9"].pax;
                 ret["10"] = flattenedData[i];
             }
@@ -1664,17 +1706,18 @@ function rawSort(data) {
         let stringB = convertToSeconds(b.times[findBestTimeIndex(b.times)]);
         a.pax = stringA;
         b.pax = stringB;
-        if (stringA == "OFF" || stringA == "DNF" || stringA == "DSQ" || stringA == "") {
+
+        if (DNFTimes.includes(stringA)) {
             stringA = "DNF";
         }
-        if (stringB == "OFF" || stringB == "DNF" || stringB == "DSQ" || stringB == "") {
+        if (DNFTimes.includes(stringB)) {
             stringB = "DNF";
         }
 
-        if (stringA == "NO TIME") {
+        if (DNSTimes.includes(stringA)) {
             stringA = "DNS";
         }
-        if (stringB == "NO TIME") {
+        if (DNSTimes.includes(stringB)) {
             stringB = "DNS";
         }
 
