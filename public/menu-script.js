@@ -15,6 +15,10 @@ document.addEventListener('DOMContentLoaded', function() {
         formDiv.style.marginTop = '20px';
         formDiv.style.padding = '10px';
         formDiv.style.textAlign = 'center';
+
+        if(!window.location.href.includes('widgetui')) {
+            return;
+        }
         
         // Add styles to keep input background color consistent
         const style = document.createElement('style');
