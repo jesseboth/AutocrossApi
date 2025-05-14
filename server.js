@@ -9,6 +9,7 @@ const { get } = require('http');
 const { dir } = require('console');
 const { exec } = require('child_process');
 const { type } = require('os');
+const { testApiHandler, setPaxIndex } = require('./test-api');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -45,6 +46,7 @@ var settings = {};
 paxIndex = {}
 fetchPaxIndex().then(classIndexDict => {
     paxIndex = classIndexDict;
+    setPaxIndex(classIndexDict); // Set the PAX index in the test-api module
 });
 
 // Schedule the task to run every Monday at 00:00
@@ -161,6 +163,9 @@ app.get('/debug', async (req, res) => {
 app.get('/paxIndex', async (req, res) => {
     res.json(paxIndex);
 });
+
+// Test API route - returns test data with 10 positions
+app.get('/test-api', testApiHandler);
 
 // Route to set user driver name
 app.post('/set-user-driver', (req, res) => {

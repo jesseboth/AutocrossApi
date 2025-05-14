@@ -32,12 +32,17 @@ let setup = false;
 
 const link = "widgetui"
 
+// Check if we're in test mode and get the refresh interval
+const urlParams = new URLSearchParams(window.location.search);
+const testMode = urlParams.get('test') === 'true';
+const refreshInterval = testMode ? (parseInt(urlParams.get('interval')) || 5000) : 30000;
+
 loop();
-let intervalId = setInterval(loop, 30000);
+let intervalId = setInterval(loop, refreshInterval);
 
 function refreshLoop() {
     clearInterval(intervalId);
-    intervalId = setInterval(loop, 30000);
+    intervalId = setInterval(loop, refreshInterval);
     loop();
 }
 
@@ -784,16 +789,27 @@ function setClasses(cclass, classes, tour = false, create = false) {
 
 async function getResults(cclass = "") {
     log("Getting results for class:", cclass);
-    path = getPath();
-    newPath = []
-    for (let i = 0; i < path.length; i++) {
-        if(path[i] != link && path[i] != cclass){
-            newPath.push(path[i]);
+    
+    // Check if we're in test mode (using URL parameter ?test=true)
+    const urlParams = new URLSearchParams(window.location.search);
+    const testMode = urlParams.get('test') === 'true';
+    
+    if (testMode) {
+        // Use the test API endpoint
+        return await getData('/test-api');
+    } else {
+        // Use the regular API endpoint
+        path = getPath();
+        newPath = []
+        for (let i = 0; i < path.length; i++) {
+            if(path[i] != link && path[i] != cclass){
+                newPath.push(path[i]);
+            }
         }
-    }
-    path = newPath.join('/');
+        path = newPath.join('/');
 
-    return await getData('/widget/' + path + '/' + cclass);
+        return await getData('/widget/' + path + '/' + cclass);
+    }
 }
 
 function convertToSeconds(time) {
