@@ -1,3 +1,4 @@
+
 const fs = require('fs');
 
 // Function to read and parse the JSON file
@@ -19,6 +20,10 @@ try {
 } catch (error) {
     console.error('Error loading PAX index:', error);
 }
+
+// Store recent drivers for test API
+let _recentDrivers = {};
+const MAX_RECENT_DRIVERS = 6;
 
 // Function to generate test data with 10 positions
 function generateTestData(userDriver = '') {
@@ -123,21 +128,46 @@ function findBestTimeIndex(times) {
     return bestTimeIndex;
 }
 
-// Function to update the test data with new times and position changes
-function updateTestData(currentData, iteration = 1) {
-    const newData = JSON.parse(JSON.stringify(currentData)); // Deep copy
-    const positions = Object.keys(newData);
-    
-    // Randomly select 2-3 drivers to update
-    const numDriversToUpdate = Math.floor(Math.random() * 2) + 2; // 2-3 drivers
-    const driversToUpdate = [];
-    
-    while (driversToUpdate.length < numDriversToUpdate) {
-        const randomPos = positions[Math.floor(Math.random() * positions.length)];
-        if (!driversToUpdate.includes(randomPos)) {
-            driversToUpdate.push(randomPos);
-        }
+// Function to update recent drivers
+function updateRecentDrivers(region, driverName, driverNumber, runCount, lastTime) {
+    if (!_recentDrivers[region]) {
+        _recentDrivers[region] = [];
     }
+
+    // Add the driver to the beginning of the array
+    _recentDrivers[region].unshift({
+        driver: driverName,
+        number: driverNumber || '',
+        runs: runCount,
+        time: lastTime || '' // Store the most recent time
+    });
+
+    // Keep only the MAX_RECENT_DRIVERS most recent runs
+    if (_recentDrivers[region].length > MAX_RECENT_DRIVERS) {
+        _recentDrivers[region] = _recentDrivers[region].slice(0, MAX_RECENT_DRIVERS);
+    }
+
+    console.log(`Updated recent drivers for ${region}:`, _recentDrivers[region]);
+    return _recentDrivers[region];
+}
+
+// Function to get recent drivers for a region
+function getRecentDrivers(region) {
+    return _recentDrivers[region] || [];
+}
+
+// Function to update the test data with new times and position changes
+function updateTestData(currentData, iteration = 1, region = 'TEST') {
+    const newData = JSON.parse(JSON.stringify(currentData)); // Deep copy
+    // Filter out non-driver properties like 'updates'
+    const positions = Object.keys(newData).filter(key => 
+        newData[key] && typeof newData[key] === 'object' && newData[key].driver
+    );
+    
+    // Select only 1 driver to update per refresh
+    const driversToUpdate = [];
+    const randomPos = positions[Math.floor(Math.random() * positions.length)];
+    driversToUpdate.push(randomPos);
     
     // Update each selected driver
     driversToUpdate.forEach(pos => {
@@ -178,12 +208,17 @@ function updateTestData(currentData, iteration = 1) {
         const paxMultiplier = paxIndex[driver.index] || 0.82;
         const paxTime = rawTime * paxMultiplier;
         driver.pax = paxTime.toFixed(3);
+        
+        // Update recent drivers
+        updateRecentDrivers(region, driver.driver, driver.number, driver.times.length, newTimeValue);
     });
     
     // Sort drivers by PAX time to determine new positions
-    const driverArray = Object.values(newData).sort((a, b) => {
-        return parseFloat(a.pax) - parseFloat(b.pax);
-    });
+    const driverArray = Object.values(newData)
+        .filter(item => item && typeof item === 'object' && item.driver) // Filter out non-driver objects
+        .sort((a, b) => {
+            return parseFloat(a.pax) - parseFloat(b.pax);
+        });
     
     // Update positions and offsets
     for (let i = 0; i < driverArray.length; i++) {
@@ -215,6 +250,19 @@ function testApiHandler(req, res) {
     const uuid = req.headers['x-device-id'] || req.headers['x-machine-id'];
     const userDriver = (req.headers['user'] || "").toLowerCase();
     
+    // Get the region from the URL or default to 'TEST'
+    const urlParts = req.url.split('/');
+    const region = urlParts.length > 2 ? urlParts[2].toUpperCase() : 'TEST';
+    
+    // Check if this is a request for recent drivers
+    if (req.url.toLowerCase().includes('/recent')) {
+        // For test mode, always return the TEST region's recent drivers
+        // This ensures that the widget always gets the recent drivers from the test API
+        console.log(`Recent drivers requested for region: ${region}`);
+        console.log(`Returning recent drivers for TEST:`, _recentDrivers['TEST'] || []);
+        return res.json(_recentDrivers['TEST'] || []);
+    }
+    
     // Get the current iteration from app.locals or initialize to 1
     if (!req.app.locals.testIteration) {
         req.app.locals.testIteration = 1;
@@ -229,10 +277,20 @@ function testApiHandler(req, res) {
     let testData;
     if (iteration === 1) {
         testData = generateTestData(userDriver);
+        
+        // Initialize recent drivers with the first run for each driver
+        for (const pos in testData) {
+            if (pos !== 'updates') { // Skip the updates counter
+                const driver = testData[pos];
+                if (driver && driver.driver && driver.times && Array.isArray(driver.times) && driver.times.length > 0) {
+                    updateRecentDrivers(region, driver.driver, driver.number, driver.times.length, driver.times[driver.times.length - 1]);
+                }
+            }
+        }
     } else {
         // Get the previous data from a cache or generate new data
         const prevData = req.app.locals.testData || generateTestData(userDriver);
-        testData = updateTestData(prevData, iteration);
+        testData = updateTestData(prevData, iteration, region);
     }
     
     // Store the data for the next request
@@ -243,5 +301,6 @@ function testApiHandler(req, res) {
 
 module.exports = {
     testApiHandler,
-    setPaxIndex
+    setPaxIndex,
+    getRecentDrivers
 };

@@ -164,8 +164,9 @@ app.get('/paxIndex', async (req, res) => {
     res.json(paxIndex);
 });
 
-// Test API route - returns test data with 10 positions
+// Test API routes - returns test data with 10 positions
 app.get('/test-api', testApiHandler);
+app.get('/test-api/:region/recent', testApiHandler);
 
 // Route to set user driver name
 app.post('/set-user-driver', (req, res) => {

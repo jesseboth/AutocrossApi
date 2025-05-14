@@ -194,9 +194,6 @@ async function populateGrid(data) {
                 if (position != "1" && data[position].pax != "" && data[position].pax != "DNS") {
                     offsetSpan.textContent = "+"+data[position].offset || '';
                 }
-                else {
-                    offsetSpan.textContent = data[position].offset || '';
-                }
             }
             else if (g_timeType == "Pax" && g_offsetType == "First") {
                 if (position == "1" && data[position].pax != "" && data[position].pax != "DNS") {
@@ -333,7 +330,16 @@ async function populateGrid(data) {
 async function fetchRecentDrivers() {
     try {
         log("recent", region);
-        const data = await getData(`/${region}/recent`);
+        
+        // Check if we're in test mode
+        const urlParams = new URLSearchParams(window.location.search);
+        const testMode = urlParams.get('test') === 'true';
+        
+        // Use the appropriate endpoint based on test mode
+        const endpoint = testMode ? `/test-api/${region}/recent` : `/${region}/recent`;
+        log("Fetching recent drivers from:", endpoint);
+        
+        const data = await getData(endpoint);
         if (data && Array.isArray(data)) {
             // Clear the current array
             recentDrivers.length = 0;
@@ -361,8 +367,13 @@ async function fetchRecentDrivers() {
             // Update the display
             updateRecentDriversDisplay(recentDrivers.length == 0);
         }
+        else {
+            console.error('Invalid data format for recent drivers:', data);
+        }
     } catch (error) {
         console.error('Error fetching recent drivers:', error);
+        // Update the display with no data
+        updateRecentDriversDisplay(true);
     }
 }
 
