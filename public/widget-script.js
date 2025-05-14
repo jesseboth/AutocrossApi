@@ -24,8 +24,8 @@ const recentDrivers = [];
 const MAX_RECENT_DRIVERS = 6;
 
 const BLUE = "#4d75eb";
-const RED = "#ff0000";
-const GREEN = "#0ec41d";
+const RED = "#b53636";
+const GREEN = "#2cab37";
 
 region = undefined;
 let setup = false;
