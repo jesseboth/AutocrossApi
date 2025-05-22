@@ -5,10 +5,6 @@ const cron = require('node-cron');
 const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
-const { get } = require('http');
-const { dir } = require('console');
-const { exec } = require('child_process');
-const { type } = require('os');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -40,7 +36,6 @@ const getJsonData = (filePath) => {
     }
 };
 const regions = getJsonData('data/regions.json');
-var settings = {};
 
 paxIndex = {}
 fetchPaxIndex().then(classIndexDict => {
@@ -258,19 +253,6 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
                 }
                 html += `</ul>`;
             }
-
-
-            // let files = await fsp.readdir(`archive/${dir}`);
-            // for (let file of files) {
-            //     if (file.includes(".json")) {
-            //         const fileName = file.split(".")[0];
-            //         html += `
-            //             <li>
-            //                 <a href="/archive/ui/${fileName}">${fileName}</a>
-            //             </li>
-            //         `;
-            //     }
-            // }
 
             // Close the unordered list
             html += `</ul>`;

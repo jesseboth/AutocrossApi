@@ -432,6 +432,7 @@ function generateTableRows(entries) {
             }
         }
 
+        if(entry.offset.startsWith("+")) { entry.offset = entry.offset.substring(1);}
         rows += `</tr>
       <tr class="${rowClass}">
           <td nowrap align="center"></td>
