@@ -69,13 +69,12 @@ a {
   margin-left: 10px;
 }
 
-#toggle-pax {
+#toggle-time {
   right: 1%;
 }
 
-#toggle-raw {
-  right: 1%;
-  right: calc(1% + 80px); 
+#toggle-offset {
+  right: calc(1% + 80px);
 }
 
 #button-container {

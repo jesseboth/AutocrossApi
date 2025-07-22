@@ -18,6 +18,12 @@ const tourClasses = {
 };
 region = undefined;
 
+// Global variables for time and offset toggles
+let g_timeType = "Pax";
+let g_offsetType = "Prev";
+let g_paxIndex = {};
+let g_currentData = {};
+
 // Wait for the DOM content to load
 document.addEventListener("DOMContentLoaded", function () {
     if (!window.location.pathname.endsWith('/')) {
@@ -39,7 +45,9 @@ document.addEventListener("DOMContentLoaded", function () {
     tour = regionData.isTour;
 
     if (tour) {
-        getEvents(region).then(events => {
+        // For tour events, we need to get the base tour region (TOUR or PRO) for events
+        const baseRegion = region.split('/')[0];
+        getEvents(baseRegion).then(events => {
             console.log("Tour event", events);
             if (events.length > 1) {
                 document.getElementById("eventForm").style.display = "block";
@@ -84,6 +92,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 
                 return;
             }
+        }).catch(error => {
+            console.error('Error fetching events:', error);
+            // If events fetch fails, hide the form
+            document.getElementById("eventForm").style.display = "none";
         });
     }
 
@@ -105,19 +117,28 @@ document.addEventListener("DOMContentLoaded", function () {
     document.getElementById("header").innerHTML = `${regionData.regionName} ${tour ? "" : "Region"}`
     document.getElementById("updated").innerHTML = `Updated: ${new Date().toLocaleString()}`;
     // document.getElementById("toggle-button").style.display = cclass == undefined || cclass == "PAX" ? "block" : "none";
-    document.getElementById("toggle-pax").style.backgroundColor = cclass == "PAX" ? "#ff0000" : "#007BFF";
-    document.getElementById("toggle-raw").style.backgroundColor = cclass == "RAW" ? "#ff0000" : "#007BFF";
+    // document.getElementById("toggle-pax").style.backgroundColor = cclass == "PAX" ? "#ff0000" : "#007BFF";
+    // document.getElementById("toggle-raw").style.backgroundColor = cclass == "RAW" ? "#ff0000" : "#007BFF";
 
     document.getElementById('results').innerHTML = "";  // Clear the results table
 
     getClasses(region).then(classes => {
-        if (!cclass && !classesOnly(classes, tour)) {
+        if (classes && !classes.includes("PAX")) {
             classes.unshift("PAX");
+        }
+        if (classes && !classes.includes("RAW")) {
             classes.unshift("RAW");
-            classes = classes.filter(ccclass => ccclass !== "PAX" && ccclass !== "RAW");
+        }
+        if (!cclass && !classesOnly(classes, tour)) {
             for (let i = 0; i < classes.length; i++) {
                 generateClassTable(classes[i]);
+
+                if (classes[i] === "PAX" || classes[i] === "RAW") {
+                    continue; // Skip PAX and RAW if they are not needed
+                }
+
                 getResults(classes[i]).then(res => {
+                    g_currentData[classes[i]] = res; // Store data for toggle operations
                     generateResultsTable(res, classes[i]);
                 }).catch(error => {
                     console.error('Error fetching results:', error); // Handle any errors from `getResults`
@@ -127,6 +148,7 @@ document.addEventListener("DOMContentLoaded", function () {
         else if (cclass !== undefined) {
             generateClassTable(cclass);
             getResults(cclass).then(res => {
+                g_currentData[cclass] = res; // Store data for toggle operations
                 generateResultsTable(res, cclass);
             }).catch(error => {
                 console.error('Error fetching results:', error); // Handle any errors from `getResults`
@@ -134,6 +156,9 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         setClasses(cclass, classes, tour);
+
+        // Fetch PAX index data
+        fetchPaxIndex();
 
         // this should happen last
         document.body.style.display = "block";
@@ -407,12 +432,116 @@ function generateTableRows(entries) {
 
     entries.forEach((entry, index) => {
         const rowClass = index % 2 === 0 ? 'rowlow' : 'rowhigh';
-
-        // Optional: Highlight best time if needed
-        // if (entry.times.length > 0) {
-        //     bestTimeIndex = findBestTimeIndex(entry.times);
-        //     entry.times[bestTimeIndex] = `<b style="border: 1px solid black; padding: 2px; color: black;">${entry.times[bestTimeIndex]}</b>`;
-        // }
+        
+        // Calculate display time and offset based on toggle settings
+        let displayTime = '';
+        let displayOffset = '';
+        
+        if (g_timeType === "Pax" && g_offsetType === "Prev") {
+            displayTime = entry.pax || '';
+            if (entry.position !== "1" && entry.pax !== "" && entry.pax !== "DNS") {
+                displayOffset = "+" + (entry.offset || '');
+            } else {
+                displayOffset = entry.offset || '';
+            }
+        }
+        else if (g_timeType === "Pax" && g_offsetType === "First") {
+            if (entry.position === "1" && entry.pax !== "" && entry.pax !== "DNS") {
+                displayTime = entry.pax || '';
+                displayOffset = entry.offset || '';
+            }
+            else if (entry.pax !== "" && entry.pax !== "DNS" && entries[0].pax !== "") {
+                displayTime = entry.pax || '';
+                displayOffset = "+" + (parseFloat(entry.pax) - parseFloat(entries[0].pax)).toFixed(3);
+            }
+            else {
+                displayTime = '';
+                displayOffset = '';
+            }
+        }
+        else if (g_timeType === "Raw" && g_offsetType === "Prev") {
+            if (entry.position === "1" && entry.raw !== "" && entry.pax !== "DNS") {
+                displayTime = entry.raw || '';
+                displayOffset = entry.offset || '';
+            }
+            else if (entry.raw !== "" && entry.pax !== "DNS" && entries[0].pax !== "") {
+                displayTime = entry.raw || '';
+                
+                const prevEntry = entries[index - 1];
+                if (prevEntry && g_paxIndex && entry.index && prevEntry.index) {
+                    // Get the PAX index for current and previous positions
+                    const currIndex = parseFloat(g_paxIndex[entry.index]) || 1;
+                    const prevIndex = parseFloat(g_paxIndex[prevEntry.index]) || 1;
+                    
+                    if (!isNaN(currIndex) && !isNaN(prevIndex)) {
+                        // Calculate the PAX time for the previous position
+                        const prevPaxTime = parseFloat(prevEntry.raw) * prevIndex;
+                        
+                        // Calculate what raw time would be needed to match the previous car's PAX time
+                        const neededRaw = prevPaxTime / currIndex;
+                        
+                        // Calculate the offset between actual raw time and needed raw time
+                        const actualRaw = parseFloat(entry.raw);
+                        const offset = actualRaw - neededRaw;
+                        
+                        displayOffset = "+" + offset.toFixed(3);
+                    } else {
+                        // Fallback to direct raw time comparison if PAX indices are not valid
+                        displayOffset = "+" + (parseFloat(entry.raw) - parseFloat(prevEntry.raw)).toFixed(3);
+                    }
+                } else {
+                    // Fallback to direct raw time comparison if paxIndex not available
+                    const prevEntry = entries[index - 1];
+                    if (prevEntry) {
+                        displayOffset = "+" + (parseFloat(entry.raw) - parseFloat(prevEntry.raw)).toFixed(3);
+                    }
+                }
+            }
+            else {
+                displayTime = '';
+                displayOffset = '';
+            }
+        }
+        else if (g_timeType === "Raw" && g_offsetType === "First") {
+            if (entry.position === "1" && entry.raw !== "" && entry.pax !== "DNS") {
+                displayTime = entry.raw || '';
+                displayOffset = entry.offset || '';
+            }
+            else if (entry.raw !== "" && entry.pax !== "DNS" && entries[0].pax !== "") {
+                displayTime = entry.raw || '';
+                
+                const firstEntry = entries[0];
+                if (g_paxIndex && entry.index && firstEntry.index) {
+                    // Get the PAX index for current and first positions
+                    const currIndex = parseFloat(g_paxIndex[entry.index]) || 1;
+                    const firstIndex = parseFloat(g_paxIndex[firstEntry.index]) || 1;
+                    
+                    if (!isNaN(currIndex) && !isNaN(firstIndex)) {
+                        // Calculate the PAX time for the first position
+                        const firstPaxTime = parseFloat(firstEntry.raw) * firstIndex;
+                        
+                        // Calculate what raw time would be needed to match the first car's PAX time
+                        const neededRaw = firstPaxTime / currIndex;
+                        
+                        // Calculate the offset between actual raw time and needed raw time
+                        const actualRaw = parseFloat(entry.raw);
+                        const offset = actualRaw - neededRaw;
+                        
+                        displayOffset = "+" + offset.toFixed(3);
+                    } else {
+                        // Fallback to direct raw time comparison if PAX indices are not valid
+                        displayOffset = "+" + (parseFloat(entry.raw) - parseFloat(firstEntry.raw)).toFixed(3);
+                    }
+                } else {
+                    // Fallback to direct raw time comparison if paxIndex not available
+                    displayOffset = "+" + (parseFloat(entry.raw) - parseFloat(firstEntry.raw)).toFixed(3);
+                }
+            }
+            else {
+                displayTime = '';
+                displayOffset = '';
+            }
+        }
 
         let numTimes = Math.max(4, entry.times.length / 2);  // At least 3 columns for times
         rows += `<tr class="${rowClass}">
@@ -420,7 +549,7 @@ function generateTableRows(entries) {
           <td style="width:7%;" nowrap align="right">${entry.index}</td>
           <td style="width:5%;" nowrap align="right">${entry.number}</td>
           <td style="width:40%;" nowrap align="left">${entry.driver}</td>
-          <td style="width:7%;" nowrap><font class='bestt'>${entry.pax}</font></td>`;
+          <td style="width:7%;" nowrap><font class='bestt'>${displayTime}</font></td>`;
 
         bestTimeIndex = findBestTimeIndex(entry.times);
         for (let i = 0; i < numTimes; i++) {
@@ -432,14 +561,20 @@ function generateTableRows(entries) {
             }
         }
 
-        if(entry.offset.startsWith("+")) { entry.offset = entry.offset.substring(1);}
+        // Clean up offset display
+        if(displayOffset.startsWith("+") && displayOffset.length > 1) { 
+            // Keep the + for positive offsets
+        } else if (displayOffset === "+" || displayOffset === "") {
+            displayOffset = '';
+        }
+        
         rows += `</tr>
       <tr class="${rowClass}">
           <td nowrap align="center"></td>
           <td nowrap align="right"></td>
           <td nowrap align="right"></td>
           <td nowrap align="left">${entry.car}</td>
-          <td nowrap>${entry.offset != '-' ? "+" + entry.offset: entry.offset}</td>`;
+          <td nowrap>${displayOffset}</td>`;
 
         for (let i = numTimes; i < numTimes * 2; i++) {
             if(i == bestTimeIndex) {
@@ -499,4 +634,74 @@ async function generateResultsTable(jsonData, cclass = undefined) {
     // }
 
     document.getElementById(cclass).innerHTML += htmlContent;
+}
+
+// Function to fetch PAX index data
+function fetchPaxIndex() {
+    getData(`/paxIndex`).then(data => {
+        console.log("PAX Index", data);
+        g_paxIndex = data;
+    }).catch(error => {
+        console.error('Error fetching PAX index:', error);
+    });
+}
+
+// Function to toggle between PAX and RAW time display
+function toggleTime() {
+    g_timeType = g_timeType === 'Pax' ? 'Raw' : 'Pax';
+    document.getElementById('toggle-time').textContent = g_timeType;
+    console.log(`Time mode changed to ${g_timeType}`);
+    
+    // Regenerate the results table with new time display
+    regenerateResults();
+}
+
+// Function to toggle between PREV and FIRST offset reference
+function toggleOffset() {
+    g_offsetType = g_offsetType === 'Prev' ? 'First' : 'Prev';
+    document.getElementById('toggle-offset').textContent = g_offsetType;
+    console.log(`Offset mode changed to ${g_offsetType}`);
+    
+    // Regenerate the results table with new offset calculation
+    regenerateResults();
+}
+
+// Function to regenerate results with current toggle settings
+function regenerateResults() {
+    // Clear current results
+    document.getElementById('results').innerHTML = "";
+    
+    // Get current class and regenerate
+    const cclass = getClass(region);
+    if (cclass !== undefined) {
+        generateClassTable(cclass);
+        getResults(cclass).then(res => {
+            g_currentData[cclass] = res; // Store data for toggle operations
+            generateResultsTable(res, cclass);
+        }).catch(error => {
+            console.error('Error fetching results:', error);
+        });
+    } else {
+        // Handle multiple classes case
+        getClasses(region).then(classes => {
+            if (!classesOnly(classes, regionData.isTour)) {
+                classes = classes.filter(ccclass => ccclass !== "PAX" && ccclass !== "RAW");
+                console.log("Classes", classes);
+                for (let i = 0; i < classes.length; i++) {
+                    generateClassTable(classes[i]);
+
+                    if (classes[i] === "PAX" || classes[i] === "RAW") {
+                        continue; // Skip PAX and RAW if they are not needed
+                    }
+
+                    getResults(classes[i]).then(res => {
+                        g_currentData[classes[i]] = res;
+                        generateResultsTable(res, classes[i]);
+                    }).catch(error => {
+                        console.error('Error fetching results:', error);
+                    });
+                }
+            }
+        });
+    }
 }

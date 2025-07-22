@@ -23,21 +23,40 @@
         .toggle-button {
             position: absolute;
             top: 0.3rem;          /* 10px converted to rem */
-            padding: 0.625rem 1.25rem; /* 10px 20px converted to rem */
-            background-color: #007BFF;
+            padding: 1.375rem 2rem; /* Increased padding for larger touch area */
+            background-color: transparent; /* Make background transparent */
             color: white;
             border: none;
             cursor: pointer;
             font-size: 0.875rem;    /* 14px converted to rem */
             border-radius: 0.3125rem; /* 5px converted to rem */
             margin-left: 0.625rem;  /* 10px converted to rem */
+            margin-top: -0.75rem;   /* Negative margin to offset increased padding */
+            margin-right: -0.75rem; /* Negative margin to offset increased padding */
             z-index: 100;
-            width: 4rem;
-            height: 2rem;
+            width: auto; /* Let width be determined by padding */
+            height: auto; /* Let height be determined by padding */
             text-align: center;
             display: flex;
             justify-content: center;
             align-items: center;
+        }
+
+        .toggle-button::before {
+            content: '';
+            position: absolute;
+            top: 0.75rem;     /* Position the visual button */
+            left: 0.75rem;    /* Position the visual button */
+            right: 0.75rem;   /* Position the visual button */
+            bottom: 0.75rem;  /* Position the visual button */
+            background-color: #007BFF; /* Actual button color */
+            border-radius: 0.3125rem; /* 5px converted to rem */
+            z-index: -1;      /* Behind the text */
+            transition: background-color 0.3s ease;
+        }
+
+        .toggle-button:hover::before {
+            background-color: #0056b3; /* Darker blue on hover */
         }
 
         body.zoom {
@@ -56,15 +75,53 @@
         
         #back-button {
             /* left: 1%; */
-            width: 3rem;
-            background-color: #6c757d;
+            background-color: transparent;
+            padding: 1.375rem 1.75rem; /* Larger padding for touch area */
+            margin-top: -0.75rem;   /* Negative margin to offset increased padding */
+            margin-left: -0.125rem; /* Adjust left margin */
+        }
+
+        #back-button::before {
+            content: '';
+            position: absolute;
+            top: 0.75rem;     /* Position the visual button */
+            left: 0.75rem;    /* Position the visual button */
+            right: 0.75rem;   /* Position the visual button */
+            bottom: 0.75rem;  /* Position the visual button */
+            background-color: #6c757d; /* Actual button color */
+            border-radius: 0.3125rem; /* 5px converted to rem */
+            z-index: -1;      /* Behind the text */
+            transition: background-color 0.3s ease;
+        }
+
+        #back-button:hover::before {
+            background-color: #545b62; /* Darker gray on hover */
         }
         
         #refresh-button {
             /* left: calc(1% + 80px); */
             left: 3.8rem;
-            width: 3rem;
-            background-color: #28a745;
+            background-color: transparent;
+            padding: 1.375rem 1.75rem; /* Larger padding for touch area */
+            margin-top: -0.75rem;   /* Negative margin to offset increased padding */
+            margin-left: -0.125rem; /* Adjust left margin */
+        }
+
+        #refresh-button::before {
+            content: '';
+            position: absolute;
+            top: 0.75rem;     /* Position the visual button */
+            left: 0.75rem;    /* Position the visual button */
+            right: 0.75rem;   /* Position the visual button */
+            bottom: 0.75rem;  /* Position the visual button */
+            background-color: #28a745; /* Actual button color */
+            border-radius: 0.3125rem; /* 5px converted to rem */
+            z-index: -1;      /* Behind the text */
+            transition: background-color 0.3s ease;
+        }
+
+        #refresh-button:hover::before {
+            background-color: #1e7e34; /* Darker green on hover */
         }
         
         html, body {
@@ -196,26 +253,35 @@
         }
         
         .staggered-button {
-            padding: 0.3125rem 0.9375rem; /* 5px 15px converted to rem */
+            padding: 0.3125rem 0.9375rem;
             background-color: #007BFF;
             color: white;
             border: none;
             cursor: pointer;
             font-size: 0.75rem; /* 12px converted to rem */
             border-radius: 0.25rem; /* 4px converted to rem */
-            height: 2rem;
+            height: 2rem; /* Original height */
             transition: background-color 0.3s ease;
-            width: 3rem;
-            /* center text */
+            width: 3rem; /* Original width */
             text-align: center;
             display: flex;
             justify-content: center;
             align-items: center;
-            
+            position: relative;
+        }
+
+        .staggered-button::after {
+            content: '';
+            position: absolute;
+            top: -0.5rem;     /* Extend clickable area upward */
+            left: -0.5rem;    /* Extend clickable area leftward */
+            right: -0.5rem;   /* Extend clickable area rightward */
+            bottom: -0.5rem;  /* Extend clickable area downward */
+            z-index: 1;       /* Above the button to capture clicks */
         }
         
         .staggered-button:hover {
-            background-color: #007BFF;
+            background-color: #0069d9;
         }
         
         .grid-item {

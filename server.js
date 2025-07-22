@@ -407,17 +407,87 @@ app.get(['/', '/ui'], async (req, res) => {
             <link rel="manifest" href="/fetch/data/manifest.json">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="/menu-styles.css">
+            <script src="/id.js"></script>
+            <script src="/menu-script.js"></script>
         </head>
         <body>
             <div class="container">
                 <h1>Autocross</h1>
                 <ul>
-                    ${Object.keys(regions).map(region => `
+    `;
+
+    // Add TOUR and PRO regions with event dropdowns, and regular regions
+    for (const region of Object.keys(regions)) {
+        if (["TOUR", "PRO"].includes(region)) {
+            try {
+                // Fetch events for this region
+                let redirect = await getRedirectURL(regions[region].url);
+                let events = [];
+                
+                if (redirect.includes("TwoEvents")) {
+                    events = await fetchEventCodes(redirect);
+                } else {
+                    // Parse out the event code
+                    const code = redirect.split("/");
+                    events = [code[3]];
+                }
+                
+                // If there's only one event, redirect directly to it
+                if (events.length === 1) {
+                    html += `
                         <li>
-                            <a href="/ui/${region}">${region}</a>
+                            <a href="/ui/${region}/${events[0]}">${region}</a>
                             <a href="${regions[region].url}">${regions[region].software}</a>
                         </li>
-                    `).join('')}
+                    `;
+                } else {
+                    // Multiple events - show dropdown
+                    const regionId = `region-${region.toLowerCase()}`;
+                    
+                    // Add the region with a click handler to toggle the dropdown
+                    html += `
+                        <li>
+                            <a onclick="toggleVisibility('${regionId}')">${region}</a>
+                            <a href="${regions[region].url}">${regions[region].software}</a>
+                        </li>
+                    `;
+                    
+                    // Add a hidden list for the events
+                    html += `<ul id="${regionId}" class="file-list" style="display: none;">`;
+                    
+                    // Add each event as a link
+                    for (const event of events) {
+                        html += `
+                            <li>
+                                <a href="/ui/${region}/${event}">${event}</a>
+                            </li>
+                        `;
+                    }
+                    
+                    // Close the events list
+                    html += `</ul>`;
+                }
+            } catch (error) {
+                console.error(`Error fetching events for ${region}:`, error);
+                html += `
+                    <li>
+                        <a href="/ui/${region}">Error Event</a>
+                        <a href="${regions[region].url}">${regions[region].software}</a>
+                    </li>
+                `;
+            }
+        } else {
+            // Regular region without dropdown
+            html += `
+                <li>
+                    <a href="/ui/${region}">${region}</a>
+                    <a href="${regions[region].url}">${regions[region].software}</a>
+                </li>
+            `;
+        }
+    }
+
+    html += `
                 </ul>
                 <ul>
                     <li>
@@ -1025,6 +1095,24 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
         recent_runs[region_name] = [];
     }
 
+    // For Pronto systems, try to fetch recent runs from Run Ticker
+    try {
+        const runTickerData = await fetchProntoRunTicker(region.url);
+        if (runTickerData.length > 0) {
+            // Reverse the data since Run Ticker shows most recent first, but we want to process chronologically
+            const reversedData = runTickerData.reverse();
+            
+            // Update recent runs using the existing updateRecentRuns function
+            for (const run of reversedData) {
+                updateRecentRuns(region_name, run.driver, run.number, run.runs, run.time);
+            }
+            debug(`Updated recent runs for ${region_name} with ${runTickerData.length} entries from Run Ticker`);
+        }
+    } catch (error) {
+        debug(`Failed to fetch Run Ticker for ${region_name}:`, error.message);
+        // Continue with normal processing if Run Ticker fails
+    }
+
     // Start or reset the timer for this region
     startRegionTimer(region_name, region, cclass, widget, user_driver, uuid, 'pronto');
 
@@ -1169,8 +1257,34 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                                 temp[element] = $(columns[col]).text().trim() == "" ? "-" : $(columns[col]).text().trim();
                             }
                         }
+                        
+                        // Check if we need to advance to the next row
                         if (row + 1 < format.length) {
-                            index++;
+                            // Check if the next row exists and belongs to this driver
+                            let nextRowIndex = index + 1;
+                            if (nextRowIndex < parse.length) {
+                                let nextColumns = $(parse[nextRowIndex]).find('td');
+                                
+                                // If next row has car info in the car column, it's a new driver
+                                // If it has times or is mostly empty, it belongs to current driver
+                                let nextRowHasCar = nextColumns.length > carIdx[1] && 
+                                                   isCar($(nextColumns[carIdx[1]]).text().trim());
+                                
+                                // Also check if next row looks like a driver info row (has position number)
+                                let nextRowHasPosition = nextColumns.length > 1 && 
+                                                        !isNaN(parseInt($(nextColumns[1]).text().trim()));
+                                
+                                if (!nextRowHasCar && !nextRowHasPosition) {
+                                    // Next row belongs to current driver, advance
+                                    index++;
+                                } else {
+                                    // Next row is a new driver, break out of format loop
+                                    break;
+                                }
+                            } else {
+                                // No next row exists, break out of format loop
+                                break;
+                            }
                         }
                     }
                     else if(columns.length <= 1) {
@@ -1197,11 +1311,22 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                     if (temp.offset == undefined || temp.offset == "") { temp.offset = "-" }
                     temp.offset = temp.offset.replace(/\(/g, '').replace(/\)/g, '');
 
-                    temp.pax = simplifyTime(temp.pax);
+                    // Handle missing pax time
+                    if (temp.pax == undefined || temp.pax == "") {
+                        temp.pax = "No Time";
+                    } else {
+                        temp.pax = simplifyTime(temp.pax);
+                    }
 
                     intPosition = parseInt(temp.position)
 
                     runs = temp.times.length;
+                    
+                    // If no times were recorded, add a default "No Time" entry
+                    if (runs == 0) {
+                        temp.times.push("No Time");
+                        runs = 1;
+                    }
                     // if(widget){
                     //     for (i = 0; i < bestIndices.length; i++) {
                     //         temp.times = bestTime(temp.times, bestIndices[i], widget);
@@ -1251,14 +1376,26 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         else {
                             bestIndex = findBestTimeIndex(temp.times)
                             bestRawTime = convertToSeconds(temp.times[bestIndex]);
-                            temp.raw = String(bestRawTime.toFixed(3));
+                            
+                            if (bestRawTime == Infinity) {
+                                temp.raw = "No Time";
+                            } else {
+                                temp.raw = String(bestRawTime.toFixed(3));
+                            }
                         }
 
                         if(widget && cclass == "RAW"){
-                            temp.pax = String(bestRawTime.toFixed(3));
+                            if (bestRawTime == Infinity) {
+                                temp.pax = "No Time";
+                            } else {
+                                temp.pax = String(bestRawTime.toFixed(3));
+                            }
                         }
-                        else if(bestIndex > -1 && paxIndex[temp.index] != undefined){
+                        else if(bestIndex > -1 && paxIndex[temp.index] != undefined && bestRawTime != Infinity){
                             temp.pax = String((bestRawTime * paxIndex[temp.class]).toFixed(3));
+                        }
+                        else if (bestRawTime == Infinity) {
+                            temp.pax = "No Time";
                         }
                     }
 
@@ -1276,14 +1413,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         results[temp.class]["10"].class = store;
                     }
                     if (widget) {
-
-                        if (stats[temp.driver] != undefined && stats[temp.driver].runs < runs) {
-                            // Get the most recent time (last time in the array)
-                            const lastTime = temp.times.length > 0 ? temp.times[temp.times.length - 1] : '';
-                            updateRecentRuns(region_name, temp.driver, temp.number, runs, lastTime);
-                        }
-
-                        // Update recent runs tracking
+                        // Update recent runs tracking (Run Ticker now handles recent runs data)
                         stats[temp.driver] = { "position": intPosition, "runs": runs }
                     }
                     temp = {}
@@ -1435,6 +1565,12 @@ function simplifyTime(_string) {
         }
     }
 
+    for(let i = 0; i < DNSTimes.length; i++){
+        if (string.includes(DNSTimes[i])) {
+            return DNSTimes[i]
+        }
+    }
+
     return string
 }
 
@@ -1455,12 +1591,16 @@ function bestTime(times, bestIdx, widget) {
 }
 
 function convertToSeconds(time, tour = false) {
-    if (time == undefined || time == "" || time.includes('DNF') || time.includes('OFF') || time.includes('DSQ') || time.includes("RRN") || time == "NO TIME") {
+    if (time == undefined || time == "" || time.includes('DNF') || time.includes('OFF') || time.includes('DSQ') || time.includes("RRN") || time == "NO TIME" || time == "No Time") {
         return Infinity;
     }
 
     const parts = time.split('+');
     const baseTime = parseFloat(parts[0]);
+
+    if (isNaN(baseTime)) {
+        return Infinity;
+    }
 
     if (parts.length > 1) {
         if (parts[1] === 'OFF' || parts[1] === 'DSQ' || parts[1] === 'DNF') {
@@ -1784,6 +1924,88 @@ async function getProntoClasses(url, offset, only=false) {
 
     } catch (error) {
         console.error('Error fetching or parsing HTML:', error);
+        return [];
+    }
+}
+
+async function fetchProntoRunTicker(baseUrl) {
+    try {
+        // Fetch the main index page
+        const { data: html } = await axios.get(baseUrl + 'index.php');
+        
+        // Load the HTML into Cheerio
+        const $ = cheerio.load(html);
+        
+        // Find the Run Ticker table
+        const runTickerTable = $('#tblRunTicker');
+        
+        if (runTickerTable.length === 0) {
+            debug('Run Ticker table not found');
+            return [];
+        }
+        
+        const recentRuns = [];
+        
+        // Parse each row in the Run Ticker table (skip header rows)
+        runTickerTable.find('tr').each((index, row) => {
+            // Skip the first row (header row)
+            if (index <= 1) {
+                return;
+            }
+            
+            const $row = $(row);
+            const cells = $row.find('td');
+            
+            // Skip header rows and rows without enough cells
+            if (cells.length < 5) {
+                return;
+            }
+            
+            // Extract data from each cell
+            const timestamp = $(cells[0]).text().trim();
+            const carClassText = $(cells[1]).text().trim();
+            const driverName = $(cells[2]).text().trim();
+            const runNumber = $(cells[3]).text().trim();
+            const timeText = $(cells[4]).text().trim();
+
+            // Skip empty rows
+            if (!timestamp || !carClassText || !driverName) {
+                return;
+            }
+            
+            // Parse car number and class from "121 EST" format
+            const carClassMatch = carClassText.match(/^(\d+)\s+(.+)$/);
+            let carNumber = '';
+            let carClass = '';
+            
+            if (carClassMatch) {
+                carNumber = carClassMatch[1];
+                carClass = carClassMatch[2];
+            } else {
+                // Fallback if format is different
+                carNumber = carClassText;
+                carClass = '';
+            }
+            
+            // Clean up the time (handle penalties)
+            const cleanTime = simplifyTime(timeText);
+            
+            recentRuns.push({
+                timestamp: timestamp,
+                driver: toTitleCase(driverName),
+                number: carNumber,
+                class: carClass,
+                runs: parseInt(runNumber) || 1,
+                time: cleanTime,
+                rawTime: timeText // Keep original for reference
+            });
+        });
+        
+        debug(`Fetched ${recentRuns.length} recent runs from Run Ticker`);
+        return recentRuns;
+        
+    } catch (error) {
+        console.error('Error fetching Pronto Run Ticker:', error);
         return [];
     }
 }
