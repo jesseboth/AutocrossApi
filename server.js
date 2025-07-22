@@ -1167,7 +1167,11 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
             return results
         }
     } catch (error) {
-        console.error(error)
+        // Log concise error info instead of full stack trace
+        const errorMsg = error.response 
+            ? `HTTP ${error.response.status}: ${error.config?.url || 'Unknown URL'}`
+            : `${error.code || 'Error'}: ${error.message || 'Unknown error'}`;
+        console.error(`Axware error for ${region_name}: ${errorMsg}`);
         return errorCode(error, widget, "error");
     }
 }
@@ -1537,7 +1541,11 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
             return results
         }
     } catch (error) {
-        console.error(error)
+        // Log concise error info instead of full stack trace
+        const errorMsg = error.response 
+            ? `HTTP ${error.response.status}: ${error.config?.url || 'Unknown URL'}`
+            : `${error.code || 'Error'}: ${error.message || 'Unknown error'}`;
+        console.error(`Pronto error for ${region_name}: ${errorMsg}`);
         return errorCode(error, widget, "error");
     }
 }
@@ -2010,7 +2018,11 @@ async function getProntoClasses(url, offset, only=false) {
         return linksArray;
 
     } catch (error) {
-        console.error('Error fetching or parsing HTML:', error);
+        // Log concise error info instead of full stack trace
+        const errorMsg = error.response 
+            ? `HTTP ${error.response.status}: ${error.config?.url || 'Unknown URL'}`
+            : `${error.code || 'Error'}: ${error.message || 'Unknown error'}`;
+        debug(`Pronto classes error: ${errorMsg}`);
         return [];
     }
 }
@@ -2092,7 +2104,11 @@ async function fetchProntoRunTicker(baseUrl) {
         return recentRuns;
         
     } catch (error) {
-        console.error('Error fetching Pronto Run Ticker:', error);
+        // Log concise error info instead of full stack trace
+        const errorMsg = error.response 
+            ? `HTTP ${error.response.status}: ${error.config?.url || 'Unknown URL'}`
+            : `${error.code || 'Error'}: ${error.message || 'Unknown error'}`;
+        debug(`Run Ticker error: ${errorMsg}`);
         return [];
     }
 }
