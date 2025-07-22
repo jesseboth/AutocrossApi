@@ -5,6 +5,7 @@ const cron = require('node-cron');
 const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
+const WebSocket = require('ws');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -70,6 +71,80 @@ const RESET_TIMEOUT = 3600000;
 const TIMER_INTERVAL = 60000;
 const DNFTimes = ["DNF", "OFF", "DSQ", "RR"]
 const DNSTimes = ["DNS", "NO TIME"]
+
+// Twitch chat integration
+const TWITCH_CHANNEL = 'jesse___9';
+let twitchChatMessages = [];
+let twitchWs = null;
+
+// Initialize Twitch chat connection
+function initTwitchChat() {
+    try {
+        twitchWs = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+        
+        twitchWs.on('open', () => {
+            debug('Connected to Twitch IRC');
+            // Send authentication for anonymous read-only access
+            // PASS SCHMOOPIIE is Twitch's standard anonymous password
+            // justinfan + random numbers creates an anonymous username
+            twitchWs.send('PASS SCHMOOPIIE');
+            twitchWs.send(`NICK justinfan${Math.floor(Math.random() * 100000)}`);
+            twitchWs.send(`JOIN #${TWITCH_CHANNEL}`);
+        });
+        
+        twitchWs.on('message', (data) => {
+            const message = data.toString();
+            
+            // Handle PING/PONG to keep connection alive
+            if (message.startsWith('PING')) {
+                twitchWs.send('PONG :tmi.twitch.tv');
+                return;
+            }
+            
+            // Parse chat messages
+            const chatMatch = message.match(/:(\w+)!\w+@\w+\.tmi\.twitch\.tv PRIVMSG #\w+ :(.+)/);
+            if (chatMatch) {
+                const [, username, chatMessage] = chatMatch;
+                
+                // Filter out commands (messages starting with !, /, etc.)
+                if (!chatMessage.startsWith('!') && !chatMessage.startsWith('/') && !chatMessage.startsWith('.')) {
+                    const newMessage = {
+                        username: username,
+                        message: chatMessage.trim(),
+                        timestamp: Date.now()
+                    };
+                    
+                    // Add to beginning of array (most recent first)
+                    twitchChatMessages.unshift(newMessage);
+                    
+                    // Keep only the last 10 messages
+                    if (twitchChatMessages.length > 10) {
+                        twitchChatMessages = twitchChatMessages.slice(0, 10);
+                    }
+                    
+                    debug(`Twitch chat: ${username}: ${chatMessage}`);
+                }
+            }
+        });
+        
+        twitchWs.on('error', (error) => {
+            console.error('Twitch WebSocket error:', error);
+        });
+        
+        twitchWs.on('close', () => {
+            debug('Twitch WebSocket closed, attempting to reconnect in 5 seconds...');
+            setTimeout(initTwitchChat, 5000);
+        });
+        
+    } catch (error) {
+        console.error('Error initializing Twitch chat:', error);
+        setTimeout(initTwitchChat, 5000);
+    }
+}
+
+// Start Twitch chat connection
+initTwitchChat();
+
 reset_stats();
 
 // Function to start a timer for a region
@@ -155,6 +230,18 @@ app.get('/debug', async (req, res) => {
 
 app.get('/paxIndex', async (req, res) => {
     res.json(paxIndex);
+});
+
+// Route to get recent Twitch chat messages
+app.get('/twitch-chat', (req, res) => {
+    // Filter out messages older than 1 hour (3600000 milliseconds)
+    const oneHourAgo = Date.now() - 3600000;
+    const recentMessages = twitchChatMessages.filter(message => message.timestamp > oneHourAgo);
+    
+    // Update the stored messages to only keep recent ones
+    twitchChatMessages = recentMessages;
+    
+    res.json(twitchChatMessages);
 });
 
 // Route to set user driver name
