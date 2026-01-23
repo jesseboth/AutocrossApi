@@ -38,6 +38,7 @@
         [null, "position", "number", "driver", "car", null],
         [null, "index", null, "t",  "t", "t", null, "pax"],
         [null, null, null, "t", "t", "t", null, "offset"],
+        [null, null, null, "t", "t", "t", null, null],
         [null, null, null, "t", "t", "t", null, null]
     ],
     "data": { "element":"table", "offset": 1, "classes_offset": 2  },

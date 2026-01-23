@@ -6,6 +6,7 @@ const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
 const WebSocket = require('ws');
+const { off } = require('process');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -209,6 +210,10 @@ app.get('/ui/:b/:c?/:d?', (req, res) => {
 
 app.get('/widgetui/:b/:c?/:d?', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'widget-index.html'));
+});
+
+app.get('/stream/:b/:c?/:d?', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'stream-index.html'));
 });
 
 app.get('/archive/ui/:b/:c?/:d?', async (req, res) => {
@@ -486,6 +491,7 @@ app.get('/archive/search', async (req, res) => {
 
 
 app.get(['/', '/ui'], async (req, res) => {
+    debug("Serving main UI page");
     let html = `
         <!DOCTYPE html>
         <html lang="en">
@@ -558,7 +564,7 @@ app.get(['/', '/ui'], async (req, res) => {
                 console.error(`Error fetching events for ${region}:`, error);
                 html += `
                     <li>
-                        <a href="/ui/${region}">Error Event</a>
+                        <a href="/ui/${region}">${region} Error</a>
                         <a href="${regions[region].url}">${regions[region].software}</a>
                     </li>
                 `;
@@ -1257,7 +1263,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
             debug("Current Class: ", currentClass)
 
             if (currentClass == "PAX") {
-                if (await checkUrlExists(region.url + "PaxIndexOverall.html")) {
+                if (region.tour && await checkUrlExists(region.url + "PaxIndexOverall.html")) {
                     url = region.url + "PaxIndexOverall.html";
                 }
                 else if (await checkUrlExists(region.url + "PaxIndexDay1.html")) {
@@ -1289,6 +1295,8 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
             else {
                 url = region.url + currentClass + ".php";
             }
+
+            console.log(url)
 
             const { data } = await axios.get(url);
             const $ = cheerio.load(data);
@@ -1344,11 +1352,18 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                                 }
                                 temp.times.push(simplifyTime(txt.replace(/\(/g, '+').replace(/\)/g, '')));
                             }
+                            else if (element.startsWith("--")) {
+                                // if this column has data, we need to go to redo this row, but go to next format row
+                                if ($(columns[col]).text().trim() != "") {
+                                    row--;
+                                    break;
+                                }
+                            }
                             else {
                                 temp[element] = $(columns[col]).text().trim() == "" ? "-" : $(columns[col]).text().trim();
                             }
                         }
-                        
+
                         // Check if we need to advance to the next row
                         if (row + 1 < format.length) {
                             // Check if the next row exists and belongs to this driver
@@ -1383,7 +1398,6 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         break;
                     }
                 }
-
                 if (valid) {
                     temp.driver = toTitleCase(temp.driver);
                 }
@@ -1482,11 +1496,17 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                                 temp.pax = String(bestRawTime.toFixed(3));
                             }
                         }
-                        else if(bestIndex > -1 && paxIndex[temp.index] != undefined && bestRawTime != Infinity){
+                        else if(temp.pax == "" && bestIndex > -1 && paxIndex[temp.index] != undefined && bestRawTime != Infinity){
                             temp.pax = String((bestRawTime * paxIndex[temp.class]).toFixed(3));
                         }
                         else if (bestRawTime == Infinity) {
-                            temp.pax = "No Time";
+                            temp.raw = "No Time";
+                        }
+
+                        if(cclass == "PAX"){
+                            if (temp.position != "1"){
+                                temp.offset = (convertToSeconds(temp.pax) - convertToSeconds(results[temp.class][String(intPosition - 1)].pax)).toFixed(3);
+                            }
                         }
                     }
 
@@ -1995,10 +2015,10 @@ async function getProntoClasses(url, offset, only=false) {
         // Initialize an array to store the extracted links without '.php'
         const linksArray = [];
 
-        if(only){
-            linksArray.push("Pax");
-            linksArray.push("Raw");
-        }
+        // if(only){
+        //     linksArray.push("Pax");
+        //     linksArray.push("Raw");
+        // }
 
         // Select all <a> elements within the targeted table
         targetElement.find('a').each((index, element) => {
@@ -2137,22 +2157,30 @@ function errorCode(error, widget, type = "string", res = undefined) {
     }
 }
 
-async function getRedirectURL(url) {
-    return new Promise((resolve, reject) => {
-        axios.get(url)
-            .then(response => {
-                const redirectMatch = response.data.match(/location\.href\s*=\s*['"]([^'"]+)['"]/);
-                if (redirectMatch && redirectMatch[1]) {
-                    const redirectUrl = new URL(redirectMatch[1], url).href; // Resolve relative URL
-                    resolve(redirectUrl);
-                } else {
-                    resolve(url);
-                }
-            })
-            .catch(error => {
-                resolve(error.config.url);
-            });
-    });
+async function getRedirect(url, region = undefined, timeout = 5000) {
+    try {
+        const response = await axios.get(url, { timeout });
+
+        const redirectMatch = response.data.match(/location\.href\s*=\s*['"]([^'"]+)['"]/);
+
+        if (redirectMatch && redirectMatch[1]) {
+            const redirectUrl = new URL(redirectMatch[1], url).href;
+
+            let redirectArr = redirectUrl.split("index.php")[0].split("/");
+            region = redirectArr[redirectArr.length - 2].toUpperCase();
+
+            return { _url: url, _region: region };
+        } else {
+            return { _url: url, _region: undefined };
+        }
+    } catch (error) {
+        if (error.code === 'ECONNABORTED') {
+            console.error(`Request to ${url} timed out after ${timeout}ms`);
+        } else {
+            console.error('Error fetching URL:', error);
+        }
+        return { _url: url, _region: undefined };
+    }
 }
 
 async function getRedirect(url, region = undefined) {

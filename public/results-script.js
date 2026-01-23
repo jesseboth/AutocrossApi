@@ -543,7 +543,7 @@ function generateTableRows(entries) {
             }
         }
 
-        let numTimes = Math.max(4, entry.times.length / 2);  // At least 3 columns for times
+        let numTimes = Math.ceil(Math.max(4, entry.times.length / 2));  // At least 3 columns for times
         rows += `<tr class="${rowClass}">
           <td style="width:5%;" nowrap align="center">${entry.position}</td>
           <td style="width:7%;" nowrap align="right">${entry.index}</td>
@@ -567,7 +567,7 @@ function generateTableRows(entries) {
         } else if (displayOffset === "+" || displayOffset === "") {
             displayOffset = '';
         }
-        
+
         rows += `</tr>
       <tr class="${rowClass}">
           <td nowrap align="center"></td>

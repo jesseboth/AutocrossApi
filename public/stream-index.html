@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jesse Both - Streaming Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: transparent;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .overlay-container {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(14, 14, 14, 0.9);
+            border: 3px solid #007BFF;
+            border-radius: 10px;
+            padding: 19px;
+            min-width: 375px;
+            max-width: 500px;
+            color: white;
+            font-size: 18px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            transition: background-color 0.3s ease;
+        }
+
+        .overlay-container.position-up {
+            background: rgba(16, 50, 16, 0.9);
+        }
+
+        .overlay-container.position-down {
+            background: rgba(50, 16, 16, 0.9);
+        }
+
+        .driver-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .position {
+            font-size: 30px;
+            font-weight: bold;
+            color: #007BFF;
+            margin-right: 12px;
+            min-width: 50px;
+        }
+
+        .position.first {
+            color: gold;
+        }
+
+        .position.second {
+            color: silver;
+        }
+
+        .position.third {
+            color: #aa5d10;
+        }
+
+        .driver-name {
+            flex: 1;
+            color: white;
+        }
+
+        .class-info {
+            font-size: 15px;
+            color: #aaaaaa;
+            margin-bottom: 10px;
+        }
+
+        .pax-time {
+            font-size: 25px;
+            font-weight: bold;
+            color: #dcdcdc;
+            margin-left: auto;
+        }
+
+        .runs-container {
+            margin-top: 10px;
+        }
+
+        .runs-label {
+            font-size: 15px;
+            color: #aaaaaa;
+            margin-bottom: 6px;
+        }
+
+        .run-times {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .run-time {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 15px;
+            color: #c7c7c7;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            flex: 0 0 calc(25% - 4px);
+            text-align: center;
+        }
+
+        .run-time.best {
+            background: rgba(0, 195, 255, 0.3);
+            color: #00c3ff;
+            font-weight: bold;
+            border-color: #00c3ff;
+        }
+
+        .run-time .cone-penalty {
+            color: #b22020;
+            font-weight: 500;
+        }
+
+        .error-state {
+            color: #ff6b6b;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .no-data {
+            color: #aaaaaa;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+        }
+
+        /* Animation for position changes */
+        @keyframes positionChange {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .position-change {
+            animation: positionChange 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <div id="overlay" class="overlay-container">
+        <div class="no-data">
+            Loading driver results...
+        </div>
+    </div>
+
+    <script src="/id.js"></script>
+    <script src="/stream-script.js"></script>
+</body>
+</html>
