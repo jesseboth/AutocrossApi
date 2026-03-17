@@ -6,7 +6,6 @@ const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
 const WebSocket = require('ws');
-const { off } = require('process');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -39,7 +38,7 @@ const getJsonData = (filePath) => {
 };
 const regions = getJsonData('data/regions.json');
 
-paxIndex = {}
+let paxIndex = {}
 fetchPaxIndex().then(classIndexDict => {
     paxIndex = classIndexDict;
 });
@@ -72,79 +71,6 @@ const RESET_TIMEOUT = 3600000;
 const TIMER_INTERVAL = 60000;
 const DNFTimes = ["DNF", "OFF", "DSQ", "RR"]
 const DNSTimes = ["DNS", "NO TIME"]
-
-// Twitch chat integration
-const TWITCH_CHANNEL = 'jesse___9';
-let twitchChatMessages = [];
-let twitchWs = null;
-
-// Initialize Twitch chat connection
-function initTwitchChat() {
-    try {
-        twitchWs = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
-        
-        twitchWs.on('open', () => {
-            debug('Connected to Twitch IRC');
-            // Send authentication for anonymous read-only access
-            // PASS SCHMOOPIIE is Twitch's standard anonymous password
-            // justinfan + random numbers creates an anonymous username
-            twitchWs.send('PASS SCHMOOPIIE');
-            twitchWs.send(`NICK justinfan${Math.floor(Math.random() * 100000)}`);
-            twitchWs.send(`JOIN #${TWITCH_CHANNEL}`);
-        });
-        
-        twitchWs.on('message', (data) => {
-            const message = data.toString();
-            
-            // Handle PING/PONG to keep connection alive
-            if (message.startsWith('PING')) {
-                twitchWs.send('PONG :tmi.twitch.tv');
-                return;
-            }
-            
-            // Parse chat messages
-            const chatMatch = message.match(/:(\w+)!\w+@\w+\.tmi\.twitch\.tv PRIVMSG #\w+ :(.+)/);
-            if (chatMatch) {
-                const [, username, chatMessage] = chatMatch;
-                
-                // Filter out commands (messages starting with !, /, etc.)
-                if (!chatMessage.startsWith('!') && !chatMessage.startsWith('/') && !chatMessage.startsWith('.')) {
-                    const newMessage = {
-                        username: username,
-                        message: chatMessage.trim(),
-                        timestamp: Date.now()
-                    };
-                    
-                    // Add to beginning of array (most recent first)
-                    twitchChatMessages.unshift(newMessage);
-                    
-                    // Keep only the last 10 messages
-                    if (twitchChatMessages.length > 10) {
-                        twitchChatMessages = twitchChatMessages.slice(0, 10);
-                    }
-                    
-                    debug(`Twitch chat: ${username}: ${chatMessage}`);
-                }
-            }
-        });
-        
-        twitchWs.on('error', (error) => {
-            console.error('Twitch WebSocket error:', error);
-        });
-        
-        twitchWs.on('close', () => {
-            debug('Twitch WebSocket closed, attempting to reconnect in 5 seconds...');
-            setTimeout(initTwitchChat, 5000);
-        });
-        
-    } catch (error) {
-        console.error('Error initializing Twitch chat:', error);
-        setTimeout(initTwitchChat, 5000);
-    }
-}
-
-// Start Twitch chat connection
-initTwitchChat();
 
 reset_stats();
 
@@ -237,27 +163,16 @@ app.get('/paxIndex', async (req, res) => {
     res.json(paxIndex);
 });
 
-// Route to get recent Twitch chat messages
-app.get('/twitch-chat', (req, res) => {
-    // Filter out messages older than 1 hour (3600000 milliseconds)
-    const oneHourAgo = Date.now() - 3600000;
-    const recentMessages = twitchChatMessages.filter(message => message.timestamp > oneHourAgo);
-    
-    // Update the stored messages to only keep recent ones
-    twitchChatMessages = recentMessages;
-    
-    res.json(twitchChatMessages);
-});
 
 // Route to set user driver name
 app.post('/set-user-driver', (req, res) => {
     const { user_driver } = req.body;
     const machineId = req.headers['x-machine-id'] || req.headers['x-device-id'] || 'default';
-    
+
     if (!user_driver) {
         return res.status(400).json({ success: false, message: 'Driver name is required' });
     }
-    
+
     // Store the user driver name by machine ID
     // make sure user driver is valid and nothing bad
     if (user_driver.includes("/") || user_driver.includes("\\") || user_driver.includes(".") || user_driver.includes(",")) {
@@ -272,7 +187,7 @@ app.post('/set-user-driver', (req, res) => {
 
     userDrivers[machineId] = user_driver;
     debug(`Set user driver for ${machineId}: ${user_driver}`);
-    
+
     return res.json({ success: true, message: 'Driver name set successfully' });
 });
 
@@ -280,7 +195,7 @@ app.post('/set-user-driver', (req, res) => {
 app.get('/get-user-driver', (req, res) => {
     const machineId = req.headers['x-machine-id'] || req.headers['x-device-id'] || 'default';
     const driverName = userDrivers[machineId] || '';
-    
+
     return res.json({ success: true, driver_name: driverName });
 });
 
@@ -361,7 +276,7 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
 
     html += `
                 </ul>
-                
+
                 <!-- Search functionality -->
                 <div class="search-container">
                     <input type="text" id="searchInput" class="search-box" placeholder="Search for a driver name...">
@@ -372,36 +287,36 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
                     <ul id="resultsContainer"></ul>
                 </div>
             </div>
-            
+
             <script>
                 document.getElementById('searchButton').addEventListener('click', function() {
                     performSearch();
                 });
-                
+
                 document.getElementById('searchInput').addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
                         performSearch();
                     }
                 });
-                
+
                 function performSearch() {
                     const searchTerm = document.getElementById('searchInput').value.trim();
                     if (searchTerm === '') return;
-                    
+
                     const resultsContainer = document.getElementById('resultsContainer');
                     resultsContainer.innerHTML = '<li>Searching...</li>';
                     document.getElementById('searchResults').style.display = 'block';
-                    
+
                     fetch('/archive/search?name=' + encodeURIComponent(searchTerm))
                         .then(response => response.json())
                         .then(data => {
                             resultsContainer.innerHTML = '';
-                            
+
                             if (data.length === 0) {
                                 resultsContainer.innerHTML = '<li>No results found</li>';
                                 return;
                             }
-                            
+
                             data.forEach(result => {
                                 const li = document.createElement('li');
                                 const a = document.createElement('a');
@@ -430,39 +345,39 @@ app.get('/archive/search', async (req, res) => {
     if (!searchName) {
         return res.status(400).json({ error: 'Search name is required' });
     }
-    
+
     const searchResults = [];
-    
+
     try {
         // Get all regions
         const regions = await fsp.readdir("archive");
-        
+
         // Loop through each region
         for (const region of regions) {
             // Get all years for this region
             const years = await fsp.readdir(`archive/${region}`);
-            
+
             // Loop through each year
             for (const year of years) {
                 // Get all files for this year
                 const files = await fsp.readdir(`archive/${region}/${year}`);
-                
+
                 // Loop through each file
                 for (const file of files) {
                     if (file.endsWith('.json')) {
                         const filePath = `archive/${region}/${year}/${file}`;
                         const eventName = file.split('.')[0];
-                        
+
                         // Read and parse the JSON file
                         const fileData = getJsonData(filePath);
-                        
+
                         // Search through all classes in the file
                         for (const className in fileData) {
                             const classData = fileData[className];
-                            
+
                             // Handle both array and object formats
                             const entries = Array.isArray(classData) ? classData : Object.values(classData);
-                            
+
                             // Search for the name in each entry
                             for (const entry of entries) {
                                 if (entry.driver && entry.driver.toLowerCase().includes(searchName.toLowerCase())) {
@@ -481,7 +396,7 @@ app.get('/archive/search', async (req, res) => {
                 }
             }
         }
-        
+
         res.json(searchResults);
     } catch (error) {
         console.error('Error searching archive:', error);
@@ -516,7 +431,7 @@ app.get(['/', '/ui'], async (req, res) => {
                 // Fetch events for this region
                 let redirect = await getRedirectURL(regions[region].url);
                 let events = [];
-                
+
                 if (redirect.includes("TwoEvents")) {
                     events = await fetchEventCodes(redirect);
                 } else {
@@ -524,7 +439,7 @@ app.get(['/', '/ui'], async (req, res) => {
                     const code = redirect.split("/");
                     events = [code[3]];
                 }
-                
+
                 // If there's only one event, redirect directly to it
                 if (events.length === 1) {
                     html += `
@@ -536,7 +451,7 @@ app.get(['/', '/ui'], async (req, res) => {
                 } else {
                     // Multiple events - show dropdown
                     const regionId = `region-${region.toLowerCase()}`;
-                    
+
                     // Add the region with a click handler to toggle the dropdown
                     html += `
                         <li>
@@ -544,10 +459,10 @@ app.get(['/', '/ui'], async (req, res) => {
                             <a href="${regions[region].url}">${regions[region].software}</a>
                         </li>
                     `;
-                    
+
                     // Add a hidden list for the events
                     html += `<ul id="${regionId}" class="file-list" style="display: none;">`;
-                    
+
                     // Add each event as a link
                     for (const event of events) {
                         html += `
@@ -556,7 +471,7 @@ app.get(['/', '/ui'], async (req, res) => {
                             </li>
                         `;
                     }
-                    
+
                     // Close the events list
                     html += `</ul>`;
                 }
@@ -618,22 +533,22 @@ app.get(['/', '/widgetui'], async (req, res) => {
         if (["TOUR", "PRO"].includes(region)) {
             // Create a unique ID for this region's dropdown
             const regionId = `region-${region.toLowerCase()}`;
-            
+
             // Add the region with a click handler to toggle the dropdown
             html += `
                 <li>
                     <a onclick="toggleVisibility('${regionId}')">${region}</a>
                 </li>
             `;
-            
+
             // Add a hidden list for the events
             html += `<ul id="${regionId}" class="file-list" style="display: none;">`;
-            
+
             try {
                 // Fetch events for this region
                 let redirect = await getRedirectURL(regions[region].url);
                 let events = [];
-                
+
                 if (redirect.includes("TwoEvents")) {
                     events = await fetchEventCodes(redirect);
                 } else {
@@ -641,7 +556,7 @@ app.get(['/', '/widgetui'], async (req, res) => {
                     const code = redirect.split("/");
                     events = [code[3]];
                 }
-                
+
                 // Add each event as a link
                 for (const event of events) {
                     html += `
@@ -658,7 +573,7 @@ app.get(['/', '/widgetui'], async (req, res) => {
                     </li>
                 `;
             }
-            
+
             // Close the events list
             html += `</ul>`;
         } else {
@@ -783,12 +698,12 @@ app.get('/archive/:year?/:a?/:b?/:c?', async (req, res) => {
     }
 });
 
-color_newTime = "#d7d955"
-color_upPos = "#4fb342"
-color_downPos = "#d14545"
-color_newTime = "#1fb9d1"
-color_none = "#ffffff"
-updates = 0;
+const color_newTime = "#d7d955"
+const color_upPos = "#4fb342"
+const color_downPos = "#d14545"
+const color_newPax = "#1fb9d1"
+const color_none = "#ffffff"
+let updates = 0;
 app.get('/:a/:b?/:c?/:d?', async (req, res) => {
     // app.get('/:widget?/:region/:class?', async (req, res) => {
     let widget = false;
@@ -853,12 +768,27 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
                 region = undefined;
             }
             else if(region == "EVENTS"){
-                redirect = await getRedirectURL(regions["TOUR"].url);
+                redirect = await getRedirectURL(regions[tourType].url);
                 if(redirect.includes("TwoEvents")){
                     res.json(await fetchEventCodes(redirect));
                     return;
                 } else {
-                    // parse out the event code
+                    code = redirect.split("/")
+                    res.json([code[3]])
+                    return
+                }
+            }
+            else if(cclass == "EVENTS"){
+                // Event code already specified in the URL — return it directly
+                if(region && region.length >= 5){
+                    res.json([region]);
+                    return;
+                }
+                redirect = await getRedirectURL(regions[tourType].url);
+                if(redirect.includes("TwoEvents")){
+                    res.json(await fetchEventCodes(redirect));
+                    return;
+                } else {
                     code = redirect.split("/")
                     res.json([code[3]])
                     return
@@ -1025,29 +955,28 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                             ;
                         }
                         else if (element == "t") {
-                            simpletime = simplifyTime($(columns[col]).text().trim())
+                            const simpletime = simplifyTime($(columns[col]).text().trim())
                             if (simpletime != ""){
                                 temp.times.push(simpletime);
                             }
                         }
                         else if (element.startsWith("t-")) {
                             const before = parseInt(element.split("-")[1]) || 0;
-                            for (col; col < columns.length - before; col++, format_offset++) {
-                                simpletime = simplifyTime($(columns[col]).text().trim())
-                                if (simpletime != ""){
+                            const timeEnd = columns.length - before;
+                            const fmtIdx = col - format_offset;
+
+                            for (; col < timeEnd; col++, format_offset++) {
+                                const simpletime = simplifyTime($(columns[col]).text().trim());
+                                if (simpletime != "") {
                                     temp.times.push(simpletime);
-                                }
-                                else {
+                                } else {
                                     break;
                                 }
                             }
 
-                            for (col; col < columns.length; col++, format_offset++) {
-                                if ($(columns[col+1]).text().trim() != "") {
-                                    break;
-                                }
-                            }
-
+                            // Position col so outer loop's col++ lands on the first reserved column
+                            col = timeEnd - 1;
+                            format_offset = col - fmtIdx;
                         }
                         else if(element == "-"){
                             // loop columns until we find a non-empty value
@@ -1174,7 +1103,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
         }
     } catch (error) {
         // Log concise error info instead of full stack trace
-        const errorMsg = error.response 
+        const errorMsg = error.response
             ? `HTTP ${error.response.status}: ${error.config?.url || 'Unknown URL'}`
             : `${error.code || 'Error'}: ${error.message || 'Unknown error'}`;
         console.error(`Axware error for ${region_name}: ${errorMsg}`);
@@ -1192,24 +1121,6 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
         recent_runs[region_name] = [];
     }
 
-    // For Pronto systems, try to fetch recent runs from Run Ticker
-    try {
-        const runTickerData = await fetchProntoRunTicker(region.url);
-        if (runTickerData.length > 0) {
-            // Reverse the data since Run Ticker shows most recent first, but we want to process chronologically
-            const reversedData = runTickerData.reverse();
-            
-            // Update recent runs using the existing updateRecentRuns function
-            for (const run of reversedData) {
-                updateRecentRuns(region_name, run.driver, run.number, run.runs, run.time);
-            }
-            debug(`Updated recent runs for ${region_name} with ${runTickerData.length} entries from Run Ticker`);
-        }
-    } catch (error) {
-        debug(`Failed to fetch Run Ticker for ${region_name}:`, error.message);
-        // Continue with normal processing if Run Ticker fails
-    }
-
     // Start or reset the timer for this region
     startRegionTimer(region_name, region, cclass, widget, user_driver, uuid, 'pronto');
 
@@ -1218,17 +1129,32 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
     let doPax = false;
     let doRaw = false;
 
-    if (cclass == undefined) {
-        if (region_name) {
-            class_offset = region_name.includes("NATS") ? region.data.nats_offset : region.data.classes_offset
-        }
-        classes = await getProntoClasses(region.url, class_offset);
+    if (region_name) {
+        class_offset = region_name.includes("NATS") ? region.data.nats_offset : region.data.classes_offset
     }
-    else {
-        if (region_name) {
-            class_offset = region_name.includes("NATS") ? region.data.nats_offset : region.data.classes_offset
-        }
-        backup = await getProntoClasses(region.url, class_offset);
+
+    const needsBackup = cclass == "PAX" || cclass == "RAW";
+    const needsClasses = cclass == undefined || cclass == "CLASSES";
+
+    // Fetch run ticker and class list in parallel when both are needed
+    const [, classResult] = await Promise.all([
+        fetchProntoRunTicker(region.url).then(runTickerData => {
+            if (runTickerData.length > 0) {
+                for (const run of runTickerData.reverse()) {
+                    updateRecentRuns(region_name, run.driver, run.number, run.runs, run.time);
+                }
+                debug(`Updated recent runs for ${region_name} with ${runTickerData.length} entries from Run Ticker`);
+            }
+        }).catch(error => {
+            debug(`Failed to fetch Run Ticker for ${region_name}:`, error.message);
+        }),
+        (needsClasses || needsBackup) ? getProntoClasses(region.url, class_offset) : Promise.resolve([])
+    ]);
+
+    if (needsClasses) {
+        classes = classResult;
+    } else if (needsBackup) {
+        backup = classResult;
     }
 
     if (cclass == "CLASSES") {
@@ -1302,7 +1228,10 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
             const $ = cheerio.load(data);
             const liveElements = $(region.data.element);
             const targetElement = liveElements.eq(region.data.offset);
-            const parse = targetElement.find('tr');
+            const parse = targetElement.find('tr').filter((i, el) => {
+                const style = $(el).attr('style') || '';
+                return !style.replace(/\s/g, '').includes('display:none');
+            });
 
             const format = cclass == "PAX" || cclass == "RAW" ? region.pax : region.format;
 
@@ -1370,16 +1299,17 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                             let nextRowIndex = index + 1;
                             if (nextRowIndex < parse.length) {
                                 let nextColumns = $(parse[nextRowIndex]).find('td');
-                                
+
                                 // If next row has car info in the car column, it's a new driver
                                 // If it has times or is mostly empty, it belongs to current driver
-                                let nextRowHasCar = nextColumns.length > carIdx[1] && 
+                                let nextRowHasCar = nextColumns.length > carIdx[1] &&
                                                    isCar($(nextColumns[carIdx[1]]).text().trim());
-                                
+
                                 // Also check if next row looks like a driver info row (has position number)
-                                let nextRowHasPosition = nextColumns.length > 1 && 
-                                                        !isNaN(parseInt($(nextColumns[1]).text().trim()));
-                                
+                                // Use strict integer match to avoid false positives from decimals (e.g. "0.865" pax index)
+                                let nextRowHasPosition = nextColumns.length > 1 &&
+                                                        /^\s*\d+\s*$/.test($(nextColumns[1]).text().trim());
+
                                 if (!nextRowHasCar && !nextRowHasPosition) {
                                     // Next row belongs to current driver, advance
                                     index++;
@@ -1426,7 +1356,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                     intPosition = parseInt(temp.position)
 
                     runs = temp.times.length;
-                    
+
                     // If no times were recorded, add a default "No Time" entry
                     if (runs == 0) {
                         temp.times.push("No Time");
@@ -1481,7 +1411,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         else {
                             bestIndex = findBestTimeIndex(temp.times)
                             bestRawTime = convertToSeconds(temp.times[bestIndex]);
-                            
+
                             if (bestRawTime == Infinity) {
                                 temp.raw = "No Time";
                             } else {
@@ -1562,7 +1492,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
         }
     } catch (error) {
         // Log concise error info instead of full stack trace
-        const errorMsg = error.response 
+        const errorMsg = error.response
             ? `HTTP ${error.response.status}: ${error.config?.url || 'Unknown URL'}`
             : `${error.code || 'Error'}: ${error.message || 'Unknown error'}`;
         console.error(`Pronto error for ${region_name}: ${errorMsg}`);
@@ -2039,7 +1969,7 @@ async function getProntoClasses(url, offset, only=false) {
 
     } catch (error) {
         // Log concise error info instead of full stack trace
-        const errorMsg = error.response 
+        const errorMsg = error.response
             ? `HTTP ${error.response.status}: ${error.config?.url || 'Unknown URL'}`
             : `${error.code || 'Error'}: ${error.message || 'Unknown error'}`;
         debug(`Pronto classes error: ${errorMsg}`);
@@ -2051,35 +1981,35 @@ async function fetchProntoRunTicker(baseUrl) {
     try {
         // Fetch the main index page
         const { data: html } = await axios.get(baseUrl + 'index.php');
-        
+
         // Load the HTML into Cheerio
         const $ = cheerio.load(html);
-        
+
         // Find the Run Ticker table
         const runTickerTable = $('#tblRunTicker');
-        
+
         if (runTickerTable.length === 0) {
             debug('Run Ticker table not found');
             return [];
         }
-        
+
         const recentRuns = [];
-        
+
         // Parse each row in the Run Ticker table (skip header rows)
         runTickerTable.find('tr').each((index, row) => {
             // Skip the first row (header row)
             if (index <= 1) {
                 return;
             }
-            
+
             const $row = $(row);
             const cells = $row.find('td');
-            
+
             // Skip header rows and rows without enough cells
             if (cells.length < 5) {
                 return;
             }
-            
+
             // Extract data from each cell
             const timestamp = $(cells[0]).text().trim();
             const carClassText = $(cells[1]).text().trim();
@@ -2091,12 +2021,12 @@ async function fetchProntoRunTicker(baseUrl) {
             if (!timestamp || !carClassText || !driverName) {
                 return;
             }
-            
+
             // Parse car number and class from "121 EST" format
             const carClassMatch = carClassText.match(/^(\d+)\s+(.+)$/);
             let carNumber = '';
             let carClass = '';
-            
+
             if (carClassMatch) {
                 carNumber = carClassMatch[1];
                 carClass = carClassMatch[2];
@@ -2105,10 +2035,10 @@ async function fetchProntoRunTicker(baseUrl) {
                 carNumber = carClassText;
                 carClass = '';
             }
-            
+
             // Clean up the time (handle penalties)
             const cleanTime = simplifyTime(timeText);
-            
+
             recentRuns.push({
                 timestamp: timestamp,
                 driver: toTitleCase(driverName),
@@ -2119,13 +2049,13 @@ async function fetchProntoRunTicker(baseUrl) {
                 rawTime: timeText // Keep original for reference
             });
         });
-        
+
         debug(`Fetched ${recentRuns.length} recent runs from Run Ticker`);
         return recentRuns;
-        
+
     } catch (error) {
         // Log concise error info instead of full stack trace
-        const errorMsg = error.response 
+        const errorMsg = error.response
             ? `HTTP ${error.response.status}: ${error.config?.url || 'Unknown URL'}`
             : `${error.code || 'Error'}: ${error.message || 'Unknown error'}`;
         debug(`Run Ticker error: ${errorMsg}`);
@@ -2136,8 +2066,8 @@ async function fetchProntoRunTicker(baseUrl) {
 function errorCode(error, widget, type = "string", res = undefined) {
     if (widget) {
         if (type == "error") {
-            err = error.stack.split('\n')[0].split(':');
-            results = new_results(true);
+            const err = error.stack.split('\n')[0].split(':');
+            const results = new_results(true);
             results["1"].driver = err[0];
             results["1"].number = error.response ? error.response.status : '-1';
             results["1"].times = err[1];
@@ -2145,7 +2075,7 @@ function errorCode(error, widget, type = "string", res = undefined) {
             return results;
         }
         else {
-            results = new_results(true);
+            const results = new_results(true);
             results["1"].driver = error;
             results["1"].number = 500;
             results["1"].car = "Error";
@@ -2154,6 +2084,20 @@ function errorCode(error, widget, type = "string", res = undefined) {
     }
     else {
         return error;
+    }
+}
+
+async function getRedirectURL(url, timeout = 5000) {
+    try {
+        const response = await axios.get(url, { timeout });
+        const redirectMatch = response.data.match(/location\.href\s*=\s*['"]([^'"]+)['"]/);
+        if (redirectMatch && redirectMatch[1]) {
+            return new URL(redirectMatch[1], url).href;
+        }
+        return url;
+    } catch (error) {
+        console.error('Error fetching redirect URL:', error);
+        return url;
     }
 }
 
@@ -2183,31 +2127,6 @@ async function getRedirect(url, region = undefined, timeout = 5000) {
     }
 }
 
-async function getRedirect(url, region = undefined) {
-    // Fetch the HTML from the URL
-    let html = "";
-
-    try {
-        const response = await axios.get(url);
-
-        // Extract potential redirect URL from <script> tag
-        const redirectMatch = response.data.match(/location\.href\s*=\s*['"]([^'"]+)['"]/);
-
-        if (redirectMatch && redirectMatch[1]) {
-            const redirectUrl = new URL(redirectMatch[1], url).href; // Resolve relative URL
-
-            redirectArr = redirectUrl.split("index.php")[0].split("/")
-            region = redirectArr[redirectArr.length - 2].toUpperCase();
-            return { _url: url, _region: region };
-        } else {
-            return { _url: url, _region: undefined };
-        }
-    } catch (error) {
-        console.error('Error fetching URL:', error);
-    }
-
-    return html;
-}
 
 async function fetchPaxIndex() {
     try {

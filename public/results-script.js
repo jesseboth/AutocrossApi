@@ -45,9 +45,7 @@ document.addEventListener("DOMContentLoaded", function () {
     tour = regionData.isTour;
 
     if (tour) {
-        // For tour events, we need to get the base tour region (TOUR or PRO) for events
-        const baseRegion = region.split('/')[0];
-        getEvents(baseRegion).then(events => {
+        getEvents(region).then(events => {
             console.log("Tour event", events);
             if (events.length > 1) {
                 document.getElementById("eventForm").style.display = "block";

@@ -68,7 +68,7 @@ async function loop() {
         log("Updates", data.updates)
         populateGrid(data)
 
-        // Fetch recent drivers and Twitch chat
+        // Fetch recent drivers
         if (region) {
             fetchRecentDrivers().catch(error => {
                 console.error('Error fetching recent drivers:', error);
@@ -355,49 +355,12 @@ async function fetchRecentDrivers() {
             });
         }
 
-        // Always fetch Twitch chat regardless of whether we have recent drivers data
-        await fetchTwitchChat();
-
         // Update the display (pass true if no recent drivers data was available)
         updateRecentDriversDisplay(!data || !Array.isArray(data) || data.length === 0);
-        
+
     } catch (error) {
         console.error('Error fetching recent drivers:', error);
-        
-        // Even if recent drivers fails, still try to fetch Twitch chat
-        try {
-            await fetchTwitchChat();
-            updateRecentDriversDisplay(true); // Show as no data since recent drivers failed
-        } catch (chatError) {
-            console.error('Error fetching Twitch chat after recent drivers failure:', chatError);
-            updateRecentDriversDisplay(true);
-        }
-    }
-}
-
-// Function to fetch recent Twitch chat messages
-async function fetchTwitchChat() {
-    try {
-        const chatData = await getData('/twitch-chat');
-        if (chatData && Array.isArray(chatData) && chatData.length > 0) {
-            // Get the most recent chat message
-            const recentMessage = chatData[0];
-            
-            // Limit recent drivers to maximum of 5 to make room for chat in slot 6
-            if (recentDrivers.length > 5) {
-                recentDrivers.splice(5); // Keep only first 5 drivers
-            }
-            
-            // Always add chat message to slot 6 when available
-            recentDrivers.push({
-                number: '💬',
-                name: `${recentMessage.username}: ${recentMessage.message}`,
-                time: '',
-                isChat: true
-            });
-        }
-    } catch (error) {
-        console.error('Error fetching Twitch chat:', error);
+        updateRecentDriversDisplay(true);
     }
 }
 
