@@ -14,7 +14,7 @@
       "software": "axware",
       "archive": true,
       "format": [
-          ["position", "index", "number", "driver", "car", null, "t-", "pax"],
+          ["position", "index", "number", "driver", "car", null, "t-1", "pax"],
           ["-", "offset"]
       ],
       "data": { "element":".live", "offset": 4 }
@@ -62,11 +62,9 @@
     "archive": false,
     "tour": true,
     "format": [
-        [null, "position", "number", "driver", "car", null],
-        [null, "index", null, "t", "t",  "t", "t", "t", "t", null, "pax"],
-        [],
-        [null, null, null, "t", "t",  "t", "t", "t", "t", null, "offset"],
-        []
+        [null, "position", "number", "driver", "car", null, null],
+        [null, "index", null, "t", "t", "t", "t", null, null, null, "pax"],
+        [null, null, null, "t", "t", "t", "t", null, null, null, "offset"]
     ],
     "data": { "element":"table", "offset": 1, "row_offset": 2, "classes_offset": 3 },
     "pax": [["position", "index", null, "number", "driver", "car", "pax"]]

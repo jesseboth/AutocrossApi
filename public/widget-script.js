@@ -68,7 +68,7 @@ async function loop() {
         log("Updates", data.updates)
         populateGrid(data)
 
-        // Fetch recent drivers and Twitch chat
+        // Fetch recent drivers
         if (region) {
             fetchRecentDrivers().catch(error => {
                 console.error('Error fetching recent drivers:', error);
@@ -184,7 +184,9 @@ async function populateGrid(data) {
             const offsetSpan = offsetRow.querySelector('.offset');
 
 
-            if (g_timeType == "Pax" && g_offsetType == "Prev") {
+            const showRaw = g_timeType == "Raw" || g_class?.toUpperCase() == "RAW";
+
+            if (!showRaw && g_offsetType == "Prev") {
                 paxSpan.textContent = data[position].pax || '';
                 if (position != "1" && data[position].pax != "" && data[position].pax != "DNS") {
                     offsetSpan.textContent = "+"+data[position].offset || '';
@@ -193,7 +195,7 @@ async function populateGrid(data) {
                     offsetSpan.textContent = data[position].offset || '';
                 }
             }
-            else if (g_timeType == "Pax" && g_offsetType == "First") {
+            else if (!showRaw && g_offsetType == "First") {
                 if (position == "1" && data[position].pax != "" && data[position].pax != "DNS") {
                     paxSpan.textContent = data[position].pax || '';
                     offsetSpan.textContent = data[position].offset || '';
@@ -207,7 +209,7 @@ async function populateGrid(data) {
                     offsetSpan.textContent = '';
                 }
             }
-            else if (g_timeType == "Raw" && g_offsetType == "Prev") {
+            else if (showRaw && g_offsetType == "Prev") {
                 if (position == "1" && data[position].raw != "" && data[position].pax != "DNS") {
                     paxSpan.textContent = data[position].raw || '';
                     offsetSpan.textContent = data[position].offset || '';
@@ -249,7 +251,7 @@ async function populateGrid(data) {
                     offsetSpan.textContent = '';
                 }
             }
-            else if (g_timeType == "Raw" && g_offsetType == "First") {
+            else if (showRaw && g_offsetType == "First") {
                 if (position == "1" && data[position].raw != "" && data[position].pax != "DNS") {
                     paxSpan.textContent = data[position].raw || '';
                     offsetSpan.textContent = data[position].offset || '';
@@ -304,12 +306,22 @@ async function populateGrid(data) {
                 positionClass.textContent = data[position].position;
             }
 
-            for(j = data[position].times.length - 6; j < data[position].times.length; j++) {
-                time = data[position].times[j];
+            const rawidx = data[position].rawidx;
+            const timesArr = data[position].times;
+            // rawidx can be a single index (number) or an array of two indices [day1best, day2best] for tour events
+            const bestIndices = Array.isArray(rawidx) ? rawidx.filter(i => i >= 0) : (rawidx !== undefined && rawidx >= 0 ? [rawidx] : []);
+            const windowStart = Math.max(0, timesArr.length - 6);
+            // If a best run is before the display window, include it as the first slot
+            const earlyBest = bestIndices.filter(i => i < windowStart);
+            const showBestFirst = earlyBest.length > 0;
+            const displayStart = showBestFirst ? Math.min(...earlyBest) : windowStart;
+            for(j = displayStart; j < timesArr.length; j++) {
+                if(showBestFirst && !bestIndices.includes(j) && j < windowStart) continue;
+                time = timesArr[j];
                 if(time != undefined && time != "") {
                     cones = time.split("+")[1] ? "+<span class='cone'>" + time.split("+")[1] + "</span>" : "";
                     time = time.split("+")[0]
-                    if(j == data[position].rawidx) {
+                    if(bestIndices.includes(j)) {
                         timesSpan.innerHTML += '<span class="tab best-time"><b>'+time+cones+'</b></span>';
                     }
                     else {
@@ -355,49 +367,12 @@ async function fetchRecentDrivers() {
             });
         }
 
-        // Always fetch Twitch chat regardless of whether we have recent drivers data
-        await fetchTwitchChat();
-
         // Update the display (pass true if no recent drivers data was available)
         updateRecentDriversDisplay(!data || !Array.isArray(data) || data.length === 0);
-        
+
     } catch (error) {
         console.error('Error fetching recent drivers:', error);
-        
-        // Even if recent drivers fails, still try to fetch Twitch chat
-        try {
-            await fetchTwitchChat();
-            updateRecentDriversDisplay(true); // Show as no data since recent drivers failed
-        } catch (chatError) {
-            console.error('Error fetching Twitch chat after recent drivers failure:', chatError);
-            updateRecentDriversDisplay(true);
-        }
-    }
-}
-
-// Function to fetch recent Twitch chat messages
-async function fetchTwitchChat() {
-    try {
-        const chatData = await getData('/twitch-chat');
-        if (chatData && Array.isArray(chatData) && chatData.length > 0) {
-            // Get the most recent chat message
-            const recentMessage = chatData[0];
-            
-            // Limit recent drivers to maximum of 5 to make room for chat in slot 6
-            if (recentDrivers.length > 5) {
-                recentDrivers.splice(5); // Keep only first 5 drivers
-            }
-            
-            // Always add chat message to slot 6 when available
-            recentDrivers.push({
-                number: '💬',
-                name: `${recentMessage.username}: ${recentMessage.message}`,
-                time: '',
-                isChat: true
-            });
-        }
-    } catch (error) {
-        console.error('Error fetching Twitch chat:', error);
+        updateRecentDriversDisplay(true);
     }
 }
 
