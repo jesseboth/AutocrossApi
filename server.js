@@ -1204,10 +1204,10 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                 }
             }
             else if (currentClass == "RAW") {
-                if (checkUrlExists(region.url + "RawOverall.html")) {
+                if (region.tour && await checkUrlExists(region.url + "RawOverall.html")) {
                     url = region.url + "RawOverall.html";
                 }
-                else if (checkUrlExists(region.url + "RawDay1.html")) {
+                else if (await checkUrlExists(region.url + "RawDay1.html")) {
                     url = region.url + "RawDay1.html";
                 }
                 else {
@@ -1358,7 +1358,8 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                     runs = temp.times.length;
 
                     // If no times were recorded, add a default "No Time" entry
-                    if (runs == 0) {
+                    // Don't do this for PAX/RAW overall pages — having no run times is expected there
+                    if (runs == 0 && cclass != "PAX" && cclass != "RAW") {
                         temp.times.push("No Time");
                         runs = 1;
                     }
@@ -1383,6 +1384,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
 
                         bestRawTime = convertToSeconds(day1[bestIndex], true) + convertToSeconds(day2[bestIndex2], true);
                         temp.raw = String(bestRawTime.toFixed(3));
+                        temp.rawidx = [bestIndex >= 0 ? bestIndex : -1, bestIndex2 >= 0 ? midpoint + bestIndex2 : -1];
                         if(doRaw){
                             temp.pax = String(bestRawTime.toFixed(3));
                         }
@@ -1407,6 +1409,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                                 bestRawTime = convertToSeconds(day1[bestIndex], true) + convertToSeconds(day2[bestIndex2], true);
                             }
                             temp.raw = String(bestRawTime.toFixed(3));
+                            temp.rawidx = [bestIndex >= 0 ? bestIndex : -1, bestIndex2 >= 0 ? midpoint + bestIndex2 : -1];
                         }
                         else {
                             bestIndex = findBestTimeIndex(temp.times)
@@ -1417,13 +1420,17 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                             } else {
                                 temp.raw = String(bestRawTime.toFixed(3));
                             }
+                            temp.rawidx = bestIndex;
                         }
 
                         if(widget && cclass == "RAW"){
                             if (bestRawTime == Infinity) {
+                                // Time came from the RAW overall page into pax column — move it to raw
+                                temp.raw = temp.pax;
                                 temp.pax = "No Time";
                             } else {
-                                temp.pax = String(bestRawTime.toFixed(3));
+                                temp.raw = String(bestRawTime.toFixed(3));
+                                temp.pax = "No Time";
                             }
                         }
                         else if(temp.pax == "" && bestIndex > -1 && paxIndex[temp.index] != undefined && bestRawTime != Infinity){
@@ -1434,8 +1441,9 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         }
 
                         if(cclass == "PAX"){
-                            if (temp.position != "1"){
-                                temp.offset = (convertToSeconds(temp.pax) - convertToSeconds(results[temp.class][String(intPosition - 1)].pax)).toFixed(3);
+                            const prevEntry = results[temp.class]?.[String(intPosition - 1)];
+                            if (temp.position != "1" && prevEntry){
+                                temp.offset = (convertToSeconds(temp.pax) - convertToSeconds(prevEntry.pax)).toFixed(3);
                             }
                         }
                     }
