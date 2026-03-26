@@ -524,6 +524,9 @@ document.addEventListener("DOMContentLoaded", function () {
     document.title = `${regionData.regionName} Widget`
 
     getClasses(region).then(classes => {
+        classes = Array.isArray(classes)
+            ? [...new Set(classes.map(label => String(label).toUpperCase()))]
+            : [];
 
         if(tour){
             classes.shift();
@@ -531,11 +534,11 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         log("Classes", classes);
-        if (!classes.includes("Pax")) {
-            classes.unshift("Pax");
+        if (!classes.includes("PAX")) {
+            classes.unshift("PAX");
         }
-        if (!classes.includes("Raw")) {
-            classes.unshift("Raw");
+        if (!classes.includes("RAW")) {
+            classes.unshift("RAW");
         }
 
 
@@ -718,6 +721,7 @@ function classesOnly(classes, tour = false) {
 function setClasses(cclass, classes, tour = false, create = false) {
     // Get the button container element
     const buttonContainer = document.getElementById('button-container');
+    const selectedClass = (cclass || "PAX").toUpperCase();
     slash = classesOnly(classes) ? "" : ""
 
     if(false && tour) {
@@ -762,6 +766,7 @@ function setClasses(cclass, classes, tour = false, create = false) {
         buttonContainer.style.display = "block";
     }
     else if (create) {
+        let matched = false;
         classes.forEach(label => {
             // Create a new button element
             const button = document.createElement('button');
@@ -770,14 +775,28 @@ function setClasses(cclass, classes, tour = false, create = false) {
             // Set an onclick handler that navigates to a specific location
             button.onclick = () => toggleURL(label);
 
-            if(label.toUpperCase() == cclass.toUpperCase()) {
+            if(label.toUpperCase() == selectedClass) {
                 button.style.backgroundColor = "#ff0000";
                 g_class = label;
+                matched = true;
             }
 
             // Append the button to the container
             buttonContainer.appendChild(button);
         });
+
+        // If URL doesn't include a class, default to first class instead of leaving g_class undefined.
+        if (!matched && classes.length > 0) {
+            const defaultClass = classes.includes("PAX") ? "PAX" : classes[0];
+            g_class = defaultClass;
+            const buttons = buttonContainer.getElementsByTagName('button');
+            for (let i = 0; i < buttons.length; i++) {
+                if (buttons[i].innerHTML.toUpperCase() === defaultClass) {
+                    buttons[i].style.backgroundColor = "#ff0000";
+                    break;
+                }
+            }
+        }
         buttonContainer.style.display = "flex";
     }
     else {
@@ -785,11 +804,11 @@ function setClasses(cclass, classes, tour = false, create = false) {
         const buttons = buttonContainer.getElementsByTagName('button');
         for (let i = 0; i < buttons.length; i++) {
             const button = buttons[i];
-            if (button.innerHTML == cclass) {
+            if (button.innerHTML.toUpperCase() == String(cclass).toUpperCase()) {
                 button.style.backgroundColor = "#ff0000";
 
-                if (g_class != cclass) {
-                    g_class = cclass;
+                if (g_class != button.innerHTML) {
+                    g_class = button.innerHTML;
                     refreshLoop();
                 }
 
@@ -806,8 +825,9 @@ async function getResults(cclass = "") {
     log("Getting results for class:", cclass);
     path = getPath();
     newPath = []
+    const classUpper = String(cclass || "").toUpperCase();
     for (let i = 0; i < path.length; i++) {
-        if(path[i] != link && path[i] != cclass){
+        if(path[i] != link && path[i].toUpperCase() != classUpper){
             newPath.push(path[i]);
         }
     }

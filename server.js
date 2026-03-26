@@ -6,10 +6,11 @@ const fs = require('fs');
 const fsp = require('fs').promises;
 const path = require('path');
 const WebSocket = require('ws');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 8000;
-const DEBUG = process.env.DEBUG || false;
+const DEBUG = process.env.DEBUG === 'true' || process.env.DEBUG === '1';
 
 function debug(...args) {
     if (DEBUG) {
@@ -25,6 +26,338 @@ app.use(express.json());
 
 // Store user drivers by machine ID
 const userDrivers = {};
+
+const STREAM_KEYS_PATH = path.join(__dirname, 'data', 'stream-keys.json');
+const STREAM_USERS_PATH = path.join(__dirname, 'data', 'stream-users.json');
+const streamKeys = {};
+const streamUsers = {};
+const streamSessions = {};
+const streamKeySubscribers = {};
+const STREAM_SESSION_MS = 1000 * 60 * 60 * 24; // 24h
+const MAX_STREAM_USERS = 10;
+
+function hashPassword(password) {
+    return crypto.createHash('sha256').update(String(password)).digest('hex');
+}
+
+function normalizeUsername(username) {
+    return String(username || '').trim().toLowerCase();
+}
+
+function getStreamUserCount() {
+    return Object.keys(streamUsers).length;
+}
+
+function saveStreamUsers() {
+    fs.writeFileSync(STREAM_USERS_PATH, JSON.stringify(streamUsers, null, 2), 'utf8');
+}
+
+function loadStreamUsers() {
+    try {
+        if (!fs.existsSync(STREAM_USERS_PATH)) {
+            return;
+        }
+        const parsed = JSON.parse(fs.readFileSync(STREAM_USERS_PATH, 'utf8'));
+        if (!parsed || typeof parsed !== 'object') {
+            return;
+        }
+        for (const username in parsed) {
+            const user = parsed[username];
+            if (!user || typeof user !== 'object') {
+                continue;
+            }
+            if (!user.passwordHash || typeof user.passwordHash !== 'string') {
+                continue;
+            }
+            streamUsers[normalizeUsername(username)] = {
+                passwordHash: user.passwordHash,
+                createdAt: user.createdAt || new Date().toISOString(),
+                createdBy: user.createdBy || null,
+                streamKey: typeof user.streamKey === 'string' ? user.streamKey : null,
+            };
+        }
+    } catch (error) {
+        console.error('Failed to load stream users:', error.message);
+    }
+}
+
+function addStreamUser(username, password, createdBy = null) {
+    const normalized = normalizeUsername(username);
+    if (!normalized) {
+        return { success: false, message: 'Username required' };
+    }
+    if (normalized.length < 3) {
+        return { success: false, message: 'Username too short' };
+    }
+    if (!/^[a-z0-9._-]+$/.test(normalized)) {
+        return { success: false, message: 'Username contains invalid characters' };
+    }
+    const rawPassword = String(password || '');
+    if (rawPassword.length < 4) {
+        return { success: false, message: 'Password too short' };
+    }
+    if (streamUsers[normalized]) {
+        return { success: false, message: 'User already exists' };
+    }
+    if (getStreamUserCount() >= MAX_STREAM_USERS) {
+        return { success: false, message: `Maximum ${MAX_STREAM_USERS} users reached` };
+    }
+    streamUsers[normalized] = {
+        passwordHash: hashPassword(rawPassword),
+        createdAt: new Date().toISOString(),
+        createdBy,
+        streamKey: null,
+    };
+    ensureUserStreamKey(normalized);
+    saveStreamUsers();
+    return { success: true, username: normalized };
+}
+
+function parseCookies(req) {
+    const header = req.headers.cookie || '';
+    const cookies = {};
+    header.split(';').forEach((cookie) => {
+        const [rawName, ...rawValue] = cookie.split('=');
+        if (!rawName || rawValue.length === 0) {
+            return;
+        }
+        cookies[rawName.trim()] = decodeURIComponent(rawValue.join('=').trim());
+    });
+    return cookies;
+}
+
+function cleanExpiredSessions() {
+    const now = Date.now();
+    for (const token in streamSessions) {
+        if (streamSessions[token].expiresAt < now) {
+            delete streamSessions[token];
+        }
+    }
+}
+
+function getSessionUser(req) {
+    cleanExpiredSessions();
+    const cookies = parseCookies(req);
+    const token = cookies.stream_admin_session;
+    if (!token || !streamSessions[token]) {
+        return null;
+    }
+    return streamSessions[token].username;
+}
+
+function requireStreamAdmin(req, res, next) {
+    const username = getSessionUser(req);
+    if (!username) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    req.streamAdminUser = username;
+    next();
+}
+
+function saveStreamKeys() {
+    fs.writeFileSync(STREAM_KEYS_PATH, JSON.stringify(streamKeys, null, 2), 'utf8');
+}
+
+function loadStreamKeys() {
+    try {
+        if (!fs.existsSync(STREAM_KEYS_PATH)) {
+            return;
+        }
+        const parsed = JSON.parse(fs.readFileSync(STREAM_KEYS_PATH, 'utf8'));
+        if (!parsed || typeof parsed !== 'object') {
+            return;
+        }
+        for (const key in parsed) {
+            streamKeys[key] = parsed[key];
+        }
+    } catch (error) {
+        console.error('Failed to load stream keys:', error.message);
+    }
+}
+
+function createStreamKey() {
+    return crypto.randomBytes(12).toString('hex');
+}
+
+function defaultStreamConfigForUser(username) {
+    return {
+        driver: '',
+        region: 'FLR',
+        cclass: 'PAX',
+        textOverride: '',
+        createdBy: username,
+        createdAt: new Date().toISOString(),
+    };
+}
+
+function isDefaultLikeConfigForUser(config, username) {
+    if (!config || typeof config !== 'object') {
+        return true;
+    }
+    const driver = String(config.driver || '').trim().toLowerCase();
+    const region = String(config.region || '').trim().toUpperCase();
+    const cclass = String(config.cclass || '').trim().toUpperCase();
+    const override = String(config.textOverride || '').trim();
+    return (
+        (driver === '' || driver === username) &&
+        region === 'FLR' &&
+        cclass === 'PAX' &&
+        override === ''
+    );
+}
+
+function getUserOwnedStreamKeys(username) {
+    const keys = [];
+    for (const key in streamKeys) {
+        const config = streamKeys[key];
+        if (config && config.createdBy === username) {
+            keys.push(key);
+        }
+    }
+    return keys;
+}
+
+function parseCreatedAtMs(config) {
+    const ms = Date.parse(config?.createdAt || '');
+    return Number.isFinite(ms) ? ms : 0;
+}
+
+function choosePreferredUserKey(username, currentKey = null) {
+    const ownedKeys = getUserOwnedStreamKeys(username);
+    if (ownedKeys.length === 0) {
+        return null;
+    }
+
+    if (
+        currentKey &&
+        ownedKeys.includes(currentKey) &&
+        !isDefaultLikeConfigForUser(streamKeys[currentKey], username)
+    ) {
+        return currentKey;
+    }
+
+    const nonDefaultKeys = ownedKeys
+        .filter((key) => !isDefaultLikeConfigForUser(streamKeys[key], username))
+        .sort((a, b) => parseCreatedAtMs(streamKeys[b]) - parseCreatedAtMs(streamKeys[a]));
+
+    if (nonDefaultKeys.length > 0) {
+        return nonDefaultKeys[0];
+    }
+
+    if (currentKey && ownedKeys.includes(currentKey)) {
+        return currentKey;
+    }
+
+    return ownedKeys.sort((a, b) => parseCreatedAtMs(streamKeys[b]) - parseCreatedAtMs(streamKeys[a]))[0];
+}
+
+function findExistingStreamKeyForUser(username) {
+    return choosePreferredUserKey(username, null);
+}
+
+function ensureUserStreamKey(username) {
+    const user = streamUsers[username];
+    if (!user) {
+        return null;
+    }
+
+    if (user.streamKey && streamKeys[user.streamKey]) {
+        return user.streamKey;
+    }
+
+    // Migration path for older users that existed before streamKey was stored on user records.
+    const existingKey = findExistingStreamKeyForUser(username);
+    if (existingKey) {
+        user.streamKey = existingKey;
+        saveStreamUsers();
+        return existingKey;
+    }
+
+    let key = createStreamKey();
+    while (streamKeys[key]) {
+        key = createStreamKey();
+    }
+
+    streamKeys[key] = defaultStreamConfigForUser(username);
+    user.streamKey = key;
+    saveStreamKeys();
+    saveStreamUsers();
+    return key;
+}
+
+function subscribeToStreamKey(key, res) {
+    if (!streamKeySubscribers[key]) {
+        streamKeySubscribers[key] = new Set();
+    }
+    streamKeySubscribers[key].add(res);
+}
+
+function unsubscribeFromStreamKey(key, res) {
+    if (!streamKeySubscribers[key]) {
+        return;
+    }
+    streamKeySubscribers[key].delete(res);
+    if (streamKeySubscribers[key].size === 0) {
+        delete streamKeySubscribers[key];
+    }
+}
+
+function notifyStreamKeyUpdate(key) {
+    if (!key) {
+        return;
+    }
+    const subscribers = streamKeySubscribers[key];
+    if (!subscribers || subscribers.size === 0) {
+        return;
+    }
+    const payload = JSON.stringify({ key, updatedAt: Date.now() });
+    for (const res of subscribers) {
+        try {
+            res.write(`event: config\n`);
+            res.write(`data: ${payload}\n\n`);
+        } catch (error) {
+            unsubscribeFromStreamKey(key, res);
+        }
+    }
+}
+
+function reconcileUserStreamKeys() {
+    let usersChanged = false;
+    let keysChanged = false;
+    for (const username in streamUsers) {
+        const user = streamUsers[username];
+        if (!user.streamKey || !streamKeys[user.streamKey]) {
+            ensureUserStreamKey(username);
+            usersChanged = true;
+            continue;
+        }
+
+        const preferredKey = choosePreferredUserKey(username, user.streamKey);
+        if (preferredKey && preferredKey !== user.streamKey) {
+            user.streamKey = preferredKey;
+            usersChanged = true;
+        }
+
+        // Enforce one-key-per-user by removing extra keys once preferred key is selected.
+        const ownedKeys = getUserOwnedStreamKeys(username);
+        for (const key of ownedKeys) {
+            if (key !== user.streamKey) {
+                delete streamKeys[key];
+                keysChanged = true;
+            }
+        }
+    }
+    if (usersChanged) {
+        saveStreamUsers();
+    }
+    if (keysChanged) {
+        saveStreamKeys();
+    }
+}
+
+loadStreamKeys();
+loadStreamUsers();
+reconcileUserStreamKeys();
 
 // Function to read and parse the JSON file
 const getJsonData = (filePath) => {
@@ -142,12 +475,262 @@ app.get('/stream/:b/:c?/:d?', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'stream-index.html'));
 });
 
+app.get('/stream-admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'stream-admin.html'));
+});
+
+app.get('/api/stream/users/status', (req, res) => {
+    return res.json({
+        success: true,
+        hasUsers: getStreamUserCount() > 0,
+        userCount: getStreamUserCount(),
+        maxUsers: MAX_STREAM_USERS,
+    });
+});
+
+app.post('/api/stream/users/signup', (req, res) => {
+    const username = req.body?.username;
+    const password = req.body?.password;
+    const created = addStreamUser(username, password, null);
+    if (!created.success) {
+        return res.status(400).json(created);
+    }
+    return res.json({ success: true, username: created.username });
+});
+
+app.post('/api/stream/login', (req, res) => {
+    const username = normalizeUsername(req.body?.username);
+    const password = String(req.body?.password || '');
+    if (!username || !password) {
+        return res.status(400).json({ success: false, message: 'Username and password required' });
+    }
+
+    if (!streamUsers[username] || streamUsers[username].passwordHash !== hashPassword(password)) {
+        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+    }
+
+    const token = crypto.randomBytes(24).toString('hex');
+    streamSessions[token] = {
+        username,
+        createdAt: Date.now(),
+        expiresAt: Date.now() + STREAM_SESSION_MS,
+    };
+    ensureUserStreamKey(username);
+    res.setHeader('Set-Cookie', `stream_admin_session=${token}; Path=/; HttpOnly; SameSite=Lax`);
+    return res.json({ success: true, username });
+});
+
+app.post('/api/stream/logout', (req, res) => {
+    const cookies = parseCookies(req);
+    const token = cookies.stream_admin_session;
+    if (token) {
+        delete streamSessions[token];
+    }
+    res.setHeader('Set-Cookie', 'stream_admin_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
+    return res.json({ success: true });
+});
+
+app.get('/api/stream/session', (req, res) => {
+    const username = getSessionUser(req);
+    if (!username) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    return res.json({ success: true, username });
+});
+
+app.get('/api/stream/users', requireStreamAdmin, (req, res) => {
+    const users = Object.keys(streamUsers).map((username) => ({
+        username,
+        createdAt: streamUsers[username].createdAt,
+        createdBy: streamUsers[username].createdBy,
+    }));
+    return res.json({
+        success: true,
+        userCount: users.length,
+        maxUsers: MAX_STREAM_USERS,
+        users,
+    });
+});
+
+app.post('/api/stream/users', requireStreamAdmin, (req, res) => {
+    const created = addStreamUser(req.body?.username, req.body?.password, req.streamAdminUser);
+    if (!created.success) {
+        return res.status(400).json(created);
+    }
+    return res.json({ success: true, username: created.username });
+});
+
+app.delete('/api/stream/users/:username', requireStreamAdmin, (req, res) => {
+    const username = normalizeUsername(req.params.username);
+    if (!streamUsers[username]) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    if (Object.keys(streamUsers).length <= 1) {
+        return res.status(400).json({ success: false, message: 'Cannot delete the last user' });
+    }
+    const key = streamUsers[username].streamKey;
+    if (key && streamKeys[key]) {
+        delete streamKeys[key];
+        saveStreamKeys();
+    }
+    delete streamUsers[username];
+    saveStreamUsers();
+    return res.json({ success: true });
+});
+
+app.get('/api/stream/keys', requireStreamAdmin, (req, res) => {
+    const key = ensureUserStreamKey(req.streamAdminUser);
+    return res.json([
+        {
+            key,
+            ...streamKeys[key],
+        },
+    ]);
+});
+
+app.post('/api/stream/keys', requireStreamAdmin, (req, res) => {
+    const driver = String(req.body?.driver || '').trim();
+    const region = String(req.body?.region || '').trim().toUpperCase();
+    const cclass = String(req.body?.cclass || '').trim().toUpperCase();
+    const textOverride = String(req.body?.textOverride || '').trim();
+
+    if (!driver || !region || !cclass) {
+        return res.status(400).json({ success: false, message: 'Driver, region, and class are required' });
+    }
+
+    const key = ensureUserStreamKey(req.streamAdminUser);
+    streamKeys[key] = {
+        driver,
+        region,
+        cclass,
+        textOverride,
+        createdBy: req.streamAdminUser,
+        createdAt: new Date().toISOString(),
+    };
+    saveStreamKeys();
+    notifyStreamKeyUpdate(key);
+
+    return res.json({ success: true, key, url: `/stream/${key}` });
+});
+
+app.post('/api/stream/keys/rotate', requireStreamAdmin, (req, res) => {
+    const username = req.streamAdminUser;
+    const user = streamUsers[username];
+    if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const oldKey = ensureUserStreamKey(username);
+    const previousConfig = streamKeys[oldKey] || defaultStreamConfigForUser(username);
+
+    let newKey = createStreamKey();
+    while (streamKeys[newKey]) {
+        newKey = createStreamKey();
+    }
+
+    streamKeys[newKey] = {
+        ...previousConfig,
+        createdBy: username,
+        createdAt: new Date().toISOString(),
+    };
+    user.streamKey = newKey;
+    if (oldKey && streamKeys[oldKey]) {
+        delete streamKeys[oldKey];
+    }
+
+    saveStreamKeys();
+    saveStreamUsers();
+    notifyStreamKeyUpdate(oldKey);
+    notifyStreamKeyUpdate(newKey);
+    return res.json({ success: true, key: newKey, url: `/stream/${newKey}` });
+});
+
+app.delete('/api/stream/keys/:key', requireStreamAdmin, (req, res) => {
+    return res.status(400).json({ success: false, message: 'Key deletion disabled. Each user has one persistent key.' });
+});
+
+app.get('/api/stream/config/:key', (req, res) => {
+    const key = String(req.params.key || '').trim();
+    const config = streamKeys[key];
+    if (!config) {
+        return res.status(404).json({ success: false, message: 'Key not found' });
+    }
+    return res.json({ success: true, ...config });
+});
+
+app.get('/api/stream/subscribe/:key', (req, res) => {
+    const key = String(req.params.key || '').trim();
+    if (!streamKeys[key]) {
+        return res.status(404).json({ success: false, message: 'Key not found' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+    }
+
+    subscribeToStreamKey(key, res);
+    res.write(`event: ready\n`);
+    res.write(`data: {"key":"${key}"}\n\n`);
+
+    const keepAlive = setInterval(() => {
+        try {
+            res.write(`: keep-alive\n\n`);
+        } catch (error) {
+            // noop: close handler will clean up
+        }
+    }, 30000);
+
+    req.on('close', () => {
+        clearInterval(keepAlive);
+        unsubscribeFromStreamKey(key, res);
+    });
+});
+
 app.get('/archive/ui/:b/:c?/:d?', async (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
 });
 
 app.get('/fetch/:a/:b/:c?', async (req, res) => {
-    res.sendFile(path.join(__dirname, req.params.a ? req.params.a : "", req.params.b ? req.params.b : "", req.params.c ? req.params.c : ""));
+    const rawParts = [req.params.a, req.params.b, req.params.c].filter(Boolean);
+    const parts = rawParts.map((part) => {
+        try {
+            return decodeURIComponent(part);
+        } catch (error) {
+            return part;
+        }
+    });
+
+    for (const part of parts) {
+        if (
+            typeof part !== 'string' ||
+            part.includes('..') ||
+            part.includes('\0') ||
+            path.isAbsolute(part)
+        ) {
+            return res.status(400).send('Invalid path');
+        }
+    }
+
+    const targetPath = path.resolve(__dirname, ...parts);
+    const rootPath = path.resolve(__dirname) + path.sep;
+
+    if (!targetPath.startsWith(rootPath)) {
+        return res.status(400).send('Invalid path');
+    }
+
+    return res.sendFile(targetPath, (err) => {
+        if (!err) {
+            return;
+        }
+        if (err.code === 'ENOENT') {
+            return res.status(404).send('Not found');
+        }
+        return res.status(500).send('Failed to fetch file');
+    });
 });
 
 app.get('/debug', async (req, res) => {
@@ -370,6 +953,9 @@ app.get('/archive/search', async (req, res) => {
 
                         // Read and parse the JSON file
                         const fileData = getJsonData(filePath);
+                        if (!fileData || typeof fileData !== 'object') {
+                            continue;
+                        }
 
                         // Search through all classes in the file
                         for (const className in fileData) {
@@ -600,15 +1186,19 @@ app.get(['/', '/widgetui'], async (req, res) => {
 // /archive/<region>_<date> -> get region
 // /archive/<region>_<date>/classes -> get classes
 app.get('/archive/:year?/:a?/:b?/:c?', async (req, res) => {
-    getEvents = false;
-    event_key = ""
-    ppax = false;
-    rraw = false;
-    year = req.params.year;
-    getClasses = false;
-    cclass = undefined;
+    let getEvents = false;
+    let event_key = "";
+    let ppax = false;
+    let rraw = false;
+    const year = req.params.year;
+    let getClasses = false;
+    let cclass = undefined;
 
     try {
+        if (!req.params.a) {
+            return res.status(400).send(errorCode('Event key is required', false));
+        }
+
         switch (req.params.a.toLowerCase()) {
             case "events":
                 getEvents = true;
@@ -659,36 +1249,43 @@ app.get('/archive/:year?/:a?/:b?/:c?', async (req, res) => {
 
         let dir = "archive/" + event_key.split("_")[0] + "/" + year;
         if (getEvents) {
-            arr = []
+            const events = new Set();
             let dirs = await fsp.readdir("archive");
-            for(let dir of dirs){
-                let files = await fsp.readdir(`archive/${dir}`);
-                for (let file of files) {
-                    file = file.split(".");
-                    if (file[1] == "json") {
-                        arr.push(file[0]);
+            for (const dir of dirs) {
+                const years = await fsp.readdir(`archive/${dir}`);
+                for (const y of years) {
+                    const files = await fsp.readdir(`archive/${dir}/${y}`);
+                    for (const file of files) {
+                        if (file.endsWith(".json")) {
+                            events.add(file.slice(0, -5));
+                        }
                     }
                 }
             }
-            res.json(arr);
+            res.json([...events]);
             return;
         }
-        else if (getClasses) {
-            res.json(Object.keys(getJsonData(`${dir}/${event_key}.json`)));
+        const eventData = getJsonData(`${dir}/${event_key}.json`);
+        if (!eventData || typeof eventData !== 'object') {
+            return res.status(404).send(errorCode('Archive event not found', false));
+        }
+
+        if (getClasses) {
+            res.json(Object.keys(eventData));
             return;
         }
 
         if (ppax) {
-            res.json(pax(getJsonData(`${dir}/${event_key}.json`)));
+            res.json(pax(eventData));
         }
         else if (rraw) {
-            res.json(raw(getJsonData(`${dir}/${event_key}.json`)));
+            res.json(raw(eventData));
         }
         else if (cclass == undefined) {
-            res.json((getJsonData(`${dir}/${event_key}.json`)));
+            res.json(eventData);
         }
         else {
-            res.json((getJsonData(`${dir}/${event_key}.json`))[cclass]);
+            res.json(eventData[cclass]);
         }
 
     } catch (err) {
@@ -698,11 +1295,6 @@ app.get('/archive/:year?/:a?/:b?/:c?', async (req, res) => {
     }
 });
 
-const color_newTime = "#d7d955"
-const color_upPos = "#4fb342"
-const color_downPos = "#d14545"
-const color_newPax = "#1fb9d1"
-const color_none = "#ffffff"
 let updates = 0;
 app.get('/:a/:b?/:c?/:d?', async (req, res) => {
     // app.get('/:widget?/:region/:class?', async (req, res) => {
@@ -842,7 +1434,7 @@ app.get('/:a/:b?/:c?/:d?', async (req, res) => {
         }
 
         if (!tour && !regions.hasOwnProperty(region)) {
-            res.status(500).send(errorCode("Region not found", widget));
+            res.status(400).send(errorCode("Region not found", widget));
             return;
         }
 
@@ -931,16 +1523,16 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
 
         const format = region.format;
 
-        results = {};
+        let results = {};
         let temp = {};
         let eligible = {};
         let valid = true;
         let currentClass = "";
 
-        for (index = 0; index < parse.length; index++) {
+        for (let index = 0; index < parse.length; index++) {
             temp = {}
             temp.times = []
-            for (row = 0; row < format.length; row++) {
+            for (let row = 0; row < format.length; row++) {
                 let columns = $(parse[index]).find('td');
                 let classElem = $(parse[index]).find('th');
                 if (classElem.length > 0) {
@@ -949,8 +1541,8 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                 }
                 if (currentClass != "" && columns.length > 1) {
                     let format_offset = 0;
-                    for (col = 0; col < columns.length; col++) {
-                        element = format[row][col - format_offset];
+                    for (let col = 0; col < columns.length; col++) {
+                        const element = format[row][col - format_offset];
                         if (element == null || element == undefined) {
                             ;
                         }
@@ -1020,11 +1612,11 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                 temp.pax = simplifyTime(temp.pax);
 
                 temp.position = temp.position.split("T")[0];
-                intPosition = parseInt(temp.position)
+                const intPosition = parseInt(temp.position)
 
-                runs = temp.times.length;
-                bestIndex = findBestTimeIndex(temp.times)
-                bestRawTime = convertToSeconds(temp.times[bestIndex]);
+                const runs = temp.times.length;
+                const bestIndex = findBestTimeIndex(temp.times)
+                const bestRawTime = convertToSeconds(temp.times[bestIndex]);
                 temp.raw = String(bestRawTime.toFixed(3));
                 if(bestIndex > 0 && bestRawTime == convertToSeconds(temp.pax) && paxIndex[temp.index] != undefined){
                     temp.pax = String((bestRawTime * paxIndex[temp.index]).toFixed(3));
@@ -1068,10 +1660,10 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
             }
             else if (cclass == "RAW") {
                 if(widget){
-                    return pax(results, widget, stats, user_driver);
+                    return raw(results, widget, stats, user_driver);
                 }
                 else {
-                    return raw(results, widget);
+                    return raw(results, widget, stats, user_driver);
                 }
             }
             else if (widget && results.hasOwnProperty(cclass)) {
@@ -1084,7 +1676,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                 return errorCode("Class not found", widget);
             }
             else if (cclass == "CLASSES") {
-                ret = []
+                const ret = []
                 if(widget){
                     ret.push("PAX");
                     ret.push("RAW");
@@ -1129,6 +1721,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
     let doPax = false;
     let doRaw = false;
 
+    let class_offset = region.data.classes_offset;
     if (region_name) {
         class_offset = region_name.includes("NATS") ? region.data.nats_offset : region.data.classes_offset
     }
@@ -1181,7 +1774,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
             return errorCode("Please select a specific class", widget);
         }
 
-        carIdx = [0, region.format[0].indexOf("car")];
+        const carIdx = [0, region.format[0].indexOf("car")];
 
         for (let idx = 0; idx < classes.length; idx++) {
             let url = "";
@@ -1240,16 +1833,16 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
             let valid = true;
             results[currentClass] = new_results(widget);
 
-            start_index = region.data.row_offset ? region.data.row_offset : 1;
-            for (index = start_index; index < parse.length; index++) {
+            const start_index = region.data.row_offset ? region.data.row_offset : 1;
+            for (let index = start_index; index < parse.length; index++) {
                 temp = {}
                 temp.times = []
-                bestIndices = []
-                for (row = 0; row < format.length; row++) {
+                const bestIndices = []
+                for (let row = 0; row < format.length; row++) {
                     if (index == start_index) {
-                        for (test = 0; test < 5; test++) {
+                        for (let test = 0; test < 5; test++) {
                             let columns = $(parse[index]).find('td');
-                            test_value = $(columns[0]).text().trim();
+                            const test_value = $(columns[0]).text().trim();
                             if (test_value == "T" || test_value == "1") {
                                 break;
                             }
@@ -1265,8 +1858,8 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                     }
 
                     if (columns.length > 1 && execute) {
-                        for (col = 0; col < columns.length; col++) {
-                            element = format[row][col];
+                        for (let col = 0; col < columns.length; col++) {
+                            const element = format[row][col];
                             if (element == null) {
                                 ;
                             }
@@ -1333,7 +1926,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                 }
 
                 if (valid && eligibleName(temp.driver, eligible)) {
-                    store = temp.class;
+                    const store = temp.class;
                     temp.class = currentClass;
                     if (temp.index == undefined || temp.index.trim() == "-") {
                         temp.index = currentClass.toUpperCase();
@@ -1353,9 +1946,9 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         temp.pax = simplifyTime(temp.pax);
                     }
 
-                    intPosition = parseInt(temp.position)
+                    const intPosition = parseInt(temp.position)
 
-                    runs = temp.times.length;
+                    let runs = temp.times.length;
 
                     // If no times were recorded, add a default "No Time" entry
                     // Don't do this for PAX/RAW overall pages — having no run times is expected there
@@ -1379,10 +1972,10 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         const day1 = temp.times.slice(0, midpoint);
                         const day2 = temp.times.slice(midpoint);
 
-                        bestIndex = findBestTimeIndex(day1)
-                        bestIndex2 = findBestTimeIndex(day2)
+                        const bestIndex = findBestTimeIndex(day1)
+                        const bestIndex2 = findBestTimeIndex(day2)
 
-                        bestRawTime = convertToSeconds(day1[bestIndex], true) + convertToSeconds(day2[bestIndex2], true);
+                        const bestRawTime = convertToSeconds(day1[bestIndex], true) + convertToSeconds(day2[bestIndex2], true);
                         temp.raw = String(bestRawTime.toFixed(3));
                         temp.rawidx = [bestIndex >= 0 ? bestIndex : -1, bestIndex2 >= 0 ? midpoint + bestIndex2 : -1];
                         if(doRaw){
@@ -1393,12 +1986,14 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                         }
                     }
                     else {
-                        if(region.tour && region_name.includes("NATS") || region_name.endsWith("NT")){
+                        let bestIndex = -1;
+                        let bestRawTime = Infinity;
+                        if(region.tour && (region_name.includes("NATS") || region_name.endsWith("NT"))){
                             const midpoint = 3;
                             const day1 = temp.times.slice(0, midpoint);
                             const day2 = temp.times.slice(midpoint);
                             bestIndex = findBestTimeIndex(day1)
-                            bestIndex2 = findBestTimeIndex(day2)
+                            const bestIndex2 = findBestTimeIndex(day2)
 
                             if(bestIndex == -1){
                                 bestRawTime = Infinity
@@ -1434,7 +2029,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                             }
                         }
                         else if(temp.pax == "" && bestIndex > -1 && paxIndex[temp.index] != undefined && bestRawTime != Infinity){
-                            temp.pax = String((bestRawTime * paxIndex[temp.class]).toFixed(3));
+                            temp.pax = String((bestRawTime * paxIndex[temp.index]).toFixed(3));
                         }
                         else if (bestRawTime == Infinity) {
                             temp.raw = "No Time";
@@ -1493,7 +2088,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
             }
 
             if (doPax || doRaw) {
-                return pax(results, widget, stats, user_driver);
+                return doRaw ? raw(results, widget, stats, user_driver) : pax(results, widget, stats, user_driver);
             }
 
             return results
@@ -1605,9 +2200,9 @@ function simplifyTime(_string) {
         return "999.99";
     }
 
-    string = _string.toUpperCase()
+    const string = _string.toUpperCase()
 
-    split = string.split("+")
+    const split = string.split("+")
     if (split.length > 1 && split[0] == split[1]) {
         return ""
     }
@@ -1632,7 +2227,7 @@ function bestTime(times, bestIdx, widget) {
         return times;
     }
 
-    split = times[bestIdx].split("+")
+    let split = times[bestIdx].split("+")
     if (split.length > 1) {
         split[1] = split[1] + "[/c]"
     }
@@ -1644,11 +2239,15 @@ function bestTime(times, bestIdx, widget) {
 }
 
 function convertToSeconds(time, tour = false) {
-    if (time == undefined || time == "" || time.includes('DNF') || time.includes('OFF') || time.includes('DSQ') || time.includes("RRN") || time == "NO TIME" || time == "No Time") {
+    if (time == undefined || time == null) {
+        return Infinity;
+    }
+    const normalized = String(time).trim().toUpperCase();
+    if (normalized == "" || normalized.includes('DNF') || normalized.includes('OFF') || normalized.includes('DSQ') || normalized.includes("RRN") || normalized == "NO TIME") {
         return Infinity;
     }
 
-    const parts = time.split('+');
+    const parts = normalized.split('+');
     const baseTime = parseFloat(parts[0]);
 
     if (isNaN(baseTime)) {
@@ -1735,7 +2334,7 @@ function flatten(results) {
     Object.keys(results).forEach(cclass => {
         Object.keys(results[cclass]).forEach(entryId => {
             const entryData = results[cclass][entryId];
-            if (typeof entryData === 'object' && entryData !== null && entryData.driver.trim() !== "") {
+            if (typeof entryData === 'object' && entryData !== null && typeof entryData.driver === 'string' && entryData.driver.trim() !== "") {
                 flattenedData.push(entryData);
             }
         });
@@ -1745,12 +2344,12 @@ function flatten(results) {
 }
 
 function pax(results, widget, stats, user_driver = undefined) {
-    ret = {}
+    let ret = {}
 
     const flattenedData = flatten(results)
     paxSort(flattenedData);
 
-    for (i = 0; i < flattenedData.length; i++) {
+    for (let i = 0; i < flattenedData.length; i++) {
         flattenedData[i].position = (i + 1).toString();
         if (i > 0) {
             const paxA = parseFloat(flattenedData[i - 1].pax);
@@ -1771,7 +2370,7 @@ function pax(results, widget, stats, user_driver = undefined) {
             if (i < 10) {
                 ret[(i + 1).toString()] = flattenedData[i];
             }
-            else if (flattenedData[i].driver.toLowerCase() == user_driver) {
+            else if ((flattenedData[i].driver || "").toLowerCase() == user_driver) {
                 flattenedData[i].offset = (flattenedData[i].pax - ret["9"].pax).toFixed(3);
                 ret["10"] = flattenedData[i];
             }
@@ -1833,12 +2432,12 @@ function paxSort(data) {
 }
 
 function raw(results, widget, stats, user_driver = undefined) {
-    ret = {}
+    let ret = {}
 
     const flattenedData = flatten(results)
     rawSort(flattenedData);
 
-    for (i = 0; i < flattenedData.length; i++) {
+    for (let i = 0; i < flattenedData.length; i++) {
         flattenedData[i].position = (i + 1).toString();
         if (i > 0) {
             const paxA = parseFloat(flattenedData[i - 1].pax);
@@ -1853,14 +2452,15 @@ function raw(results, widget, stats, user_driver = undefined) {
         }
 
         if (widget) {
-            const runs = flattenedData[i].times.split("   ").filter(item => item.trim() !== "").length;
-            flattenedData[i].color = getColor(i+1, stats, flattenedData[i].driver, runs);
+            const runs = Array.isArray(flattenedData[i].times)
+                ? flattenedData[i].times.length
+                : String(flattenedData[i].times || "").split("   ").filter(item => item.trim() !== "").length;
             stats[flattenedData[i].driver] = { "position": i + 1, "runs": runs }
 
             if (i < 10) {
                 ret[(i + 1).toString()] = flattenedData[i];
             }
-            else if (flattenedData[i].driver.toLowerCase() == user_driver) {
+            else if ((flattenedData[i].driver || "").toLowerCase() == user_driver) {
                 flattenedData[i].offset = flattenedData[i].pax - ret["9"].pax;
                 ret["10"] = flattenedData[i];
             }

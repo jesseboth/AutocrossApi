@@ -1,5 +1,6 @@
 // Constants
 const UPDATE_INTERVAL = 30000; // 30 seconds
+const CONFIG_REFRESH_INTERVAL = 5000; // 5 seconds
 const POSITION_HIGHLIGHT_DURATION = 15000; // 15 seconds
 const GREEN_COLOR = "#2cab37";
 const RED_COLOR = "#b53636";
@@ -10,15 +11,19 @@ let previousPosition = null;
 let region = null;
 let currentClass = null;
 let driverName = "Jesse Both"; // Default driver name
+let displayName = driverName;
 let positionHighlightTimeout = null;
+let streamKey = null;
+let configEventSource = null;
+let parseError = null;
 
 // Initialize the overlay
-document.addEventListener("DOMContentLoaded", function() {
-    parseURL();
+document.addEventListener("DOMContentLoaded", async function() {
+    await parseURL();
     if (region && currentClass) {
         startDataLoop();
-    } else {
-        showError("Invalid URL format. Use: /stream/REGION/CLASS");
+    } else if (!parseError) {
+        showError("Invalid URL format. Use: /stream/<key> or /stream/REGION/CLASS");
     }
 });
 
@@ -29,9 +34,34 @@ function getURLParameter(name) {
 }
 
 // Parse URL to get region, class, and driver name
-function parseURL() {
+async function parseURL() {
     const pathParts = window.location.pathname.split('/').filter(part => part !== '');
-    
+
+    if (pathParts.length === 2 && pathParts[0] === 'stream') {
+        streamKey = pathParts[1];
+        try {
+            const response = await fetch(`/api/stream/config/${encodeURIComponent(streamKey)}`);
+            if (!response.ok) {
+                throw new Error(`Key lookup failed (${response.status})`);
+            }
+            const config = await response.json();
+            if (!config.success) {
+                throw new Error(config.message || 'Invalid key');
+            }
+            region = String(config.region || '').toUpperCase();
+            currentClass = String(config.cclass || '').toUpperCase();
+            driverName = String(config.driver || driverName);
+            displayName = config.textOverride && config.textOverride.trim() !== ''
+                ? config.textOverride.trim()
+                : driverName;
+            return;
+        } catch (error) {
+            parseError = `Invalid stream key: ${error.message}`;
+            showError(parseError);
+            return;
+        }
+    }
+
     if (pathParts.length >= 3 && pathParts[0] === 'stream') {
         region = pathParts[1].toUpperCase();
         currentClass = pathParts[2].toUpperCase();
@@ -48,12 +78,79 @@ function parseURL() {
     if (driverParam) {
         driverName = decodeURIComponent(driverParam);
     }
+    displayName = driverName;
 }
 
 // Start the data fetching loop
 function startDataLoop() {
     fetchData();
     setInterval(fetchData, UPDATE_INTERVAL);
+    if (streamKey) {
+        setInterval(checkConfigUpdates, CONFIG_REFRESH_INTERVAL);
+        connectConfigStream();
+    }
+}
+
+function connectConfigStream() {
+    if (!streamKey || typeof EventSource === 'undefined') {
+        return;
+    }
+
+    if (configEventSource) {
+        configEventSource.close();
+        configEventSource = null;
+    }
+
+    configEventSource = new EventSource(`/api/stream/subscribe/${encodeURIComponent(streamKey)}`);
+    configEventSource.addEventListener('config', () => {
+        checkConfigUpdates();
+    });
+    configEventSource.onerror = () => {
+        // EventSource will retry automatically.
+    };
+}
+
+async function checkConfigUpdates() {
+    if (!streamKey) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/stream/config/${encodeURIComponent(streamKey)}`);
+        if (!response.ok) {
+            return;
+        }
+        const config = await response.json();
+        if (!config.success) {
+            return;
+        }
+
+        const nextRegion = String(config.region || '').toUpperCase();
+        const nextClass = String(config.cclass || '').toUpperCase();
+        const nextDriver = String(config.driver || driverName);
+        const nextDisplayName = config.textOverride && config.textOverride.trim() !== ''
+            ? config.textOverride.trim()
+            : nextDriver;
+
+        const changed =
+            nextRegion !== region ||
+            nextClass !== currentClass ||
+            nextDriver !== driverName ||
+            nextDisplayName !== displayName;
+
+        if (!changed) {
+            return;
+        }
+
+        region = nextRegion;
+        currentClass = nextClass;
+        driverName = nextDriver;
+        displayName = nextDisplayName;
+        previousPosition = null;
+        fetchData();
+    } catch (error) {
+        console.warn('Config refresh failed:', error.message);
+    }
 }
 
 // Fetch data from the API
@@ -179,7 +276,7 @@ function updateDisplay(data, position) {
     overlay.innerHTML = `
         <div class="driver-header">
             <div class="position ${positionClass}">${position}${getOrdinalSuffix(position)}</div>
-            <div class="driver-name">${driverName}</div>
+            <div class="driver-name">${displayName}</div>
             <div class="pax-time">${data.pax || 'No Time'}</div>
         </div>
         <div class="class-info">Class: ${classDisplay}</div>

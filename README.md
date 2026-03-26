@@ -29,8 +29,39 @@ Use the `docker.sh` script to manage the Docker container for the API. This scri
 - In Tasker, export Autocross Data as an app
 - Modiy Tasker to point to your Autocross API server
 
+### 3. Stream Overlay Keys
 
-### 2. Adding New Regions
+The stream overlay now supports key-based URLs:
+
+```
+GET /stream/<key>
+```
+
+Create/manage keys from:
+
+```
+GET /stream-admin
+```
+
+User accounts are managed directly in the `/stream-admin` UI:
+
+- If no users exist, create the first user from the login card.
+- After login, you can add/remove users in the Users section.
+- Maximum users: `10`.
+
+Stream key configs are persisted in:
+
+`data/stream-keys.json`
+
+Each key stores:
+
+- driver (text)
+- region
+- class
+- optional manual text override
+
+
+### 4. Adding New Regions
 
 To add a new region to the API:
 
@@ -84,33 +115,37 @@ You can retrieve data formatted for KWGT (Kustom Widget) or Tasker:
 
 The following endpoints provide access to archived event data:
 
-- **Get List of All Archived Events**:  
-  Retrieve a list of all archived events.
+- **Get List of Archived Events for a Year**:  
+  Retrieve a list of archived events for a specific year directory.
   ```
-  GET /archive/events
+  GET /archive/<year>/events
   ```
+  - `<year>`: Two-digit archive year folder (for example `24`, `25`, `26`).
 
 - **Get Data for a Specific Archived Event**:  
   Retrieve all data for a specific archived event.
   ```
-  GET /archive/<event>
+  GET /archive/<year>/<region_event>
   ```
-  - `<event>`: The specific event identifier (e.g., "FLR_07-21-24").
+  - `<year>`: Two-digit archive year folder.
+  - `<region_event>`: Event identifier in `<REGION>_<EVENT_CODE_OR_DATE>` format (for example `FLR_07-21-24`).
 
 - **Get Class Data for a Specific Archived Event**:  
   Retrieve class-specific data for an archived event.
   ```
-  GET /archive/<event>/<class>
+  GET /archive/<year>/<region_event>/<class>
   ```
-  - `<event>`: The specific event identifier.
+  - `<year>`: Two-digit archive year folder.
+  - `<region_event>`: The specific event identifier.
   - `<class>`: The specific class. Optional.
 
 - **Get PAX Data for a Specific Archived Event**:  
   Retrieve PAX data for a specific archived event.
   ```
-  GET /archive/<event>/pax
+  GET /archive/<year>/<region_event>/pax
   ```
-  - `<event>`: The specific event identifier.
+  - `<year>`: Two-digit archive year folder.
+  - `<region_event>`: The specific event identifier.
 
 ## Example Usage
 
@@ -129,24 +164,24 @@ The following endpoints provide access to archived event data:
    GET /widget/FLR/S1
    ```
 
-4. **Get all archived events:**
+4. **Get all archived events for year 24:**
    ```
-   GET /archive/events
-   ```
-
-5. **Get all data for an archived event FLR_07-21-24:**
-   ```
-   GET /archive/FLR_07-21-24
+   GET /archive/24/events
    ```
 
-6. **Get class data for the archived event FLR_07-21-24 and class S1:**
+5. **Get all data for archived event FLR_07-21-24 in year 24:**
    ```
-   GET /archive/FLR_07-21-24/S1
+   GET /archive/24/FLR_07-21-24
    ```
 
-7. **Get PAX data for the archived event FLR_07-21-24:**
+6. **Get class data for archived event FLR_07-21-24 and class S1:**
    ```
-   GET /archive/FLR_07-21-24/pax
+   GET /archive/24/FLR_07-21-24/S1
+   ```
+
+7. **Get PAX data for archived event FLR_07-21-24:**
+   ```
+   GET /archive/24/FLR_07-21-24/pax
    ```
 
 ## Notes
@@ -155,6 +190,7 @@ The following endpoints provide access to archived event data:
 - **Class** and **pax** parameters are optional for both real-time and archived endpoints.
 - Widget data can be accessed by prefixing the path with `widget/`.
 - Archived events can be accessed by using the `/archive/` prefix.
+- Archived API paths require a `<year>` segment before the event specifier.
 
 ## Conclusion
 

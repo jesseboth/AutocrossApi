@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "deploy": "PORT=8001 node server.js",
-    "debug": "DEBUG=true node server.js"
+    "debug": "DEBUG=true node server.js",
+    "test": "node --test test/*.test.js",
+    "test:api": "RUN_API_TESTS=1 node --test test/api.test.js",
+    "test:full-api": "RUN_FULL_API=1 BASE_URL=http://127.0.0.1:8000 node --test test/full-api.test.js"
   },
   "author": "Jesse Both",
   "license": "ISC",

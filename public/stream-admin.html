@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Overlay Keys</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 0 16px;
+            background: #111;
+            color: #f3f3f3;
+        }
+        h1, h2 { margin: 12px 0; }
+        .card {
+            background: #1d1d1d;
+            border: 1px solid #353535;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+        label { display: block; margin: 8px 0 4px; }
+        input, select, button {
+            width: 100%;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px solid #404040;
+            background: #121212;
+            color: #fff;
+        }
+        button {
+            cursor: pointer;
+            background: #0d63cf;
+            border: none;
+            margin-top: 10px;
+        }
+        button.secondary {
+            background: #444;
+        }
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .hidden { display: none; }
+        .mono { font-family: monospace; }
+        .key-row {
+            border-top: 1px solid #2f2f2f;
+            padding: 10px 0;
+        }
+        .muted { color: #bcbcbc; font-size: 13px; }
+        .error { color: #ff7070; margin-top: 8px; }
+        .success { color: #7be07b; margin-top: 8px; }
+    </style>
+</head>
+<body>
+    <h1>Stream Overlay Key Manager</h1>
+
+    <div id="login-card" class="card">
+        <h2>User Login</h2>
+        <div id="bootstrap-note" class="muted hidden"></div>
+        <label for="username">Username</label>
+        <input id="username" type="text" autocomplete="username">
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password">
+        <button id="login-btn">Login</button>
+        <button id="bootstrap-btn" class="secondary">Create User</button>
+        <div id="login-msg"></div>
+    </div>
+
+    <div id="admin-card" class="hidden">
+        <div class="card">
+            <h2>My Stream Overlay</h2>
+            <label for="stream-url">My Stream URL</label>
+            <input id="stream-url" class="mono" type="text" readonly>
+            <div class="row">
+                <div>
+                    <label for="region">Region</label>
+                    <select id="region"></select>
+                </div>
+                <div>
+                    <label for="cclass">Class</label>
+                    <select id="cclass"></select>
+                </div>
+            </div>
+            <label for="driver">Driver (text)</label>
+            <input id="driver" type="text" placeholder="Driver name">
+            <label for="override">Manual Text Override (optional)</label>
+            <input id="override" type="text" placeholder="Text displayed in overlay instead of driver">
+            <button id="copy-url-btn" class="secondary">Copy Stream URL</button>
+            <button id="rotate-key-btn" class="secondary">Create New Key</button>
+            <button id="create-btn">Save Changes</button>
+            <button id="logout-btn" class="secondary">Logout</button>
+            <div id="create-msg"></div>
+        </div>
+
+    </div>
+
+    <script src="/stream-admin.js"></script>
+</body>
+</html>
