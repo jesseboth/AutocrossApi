@@ -271,7 +271,7 @@ function updateDisplay(data, position) {
     const runTimesHtml = formatRunTimes(data.times, data.rawidx);
     
     // Get class name for display
-    const classDisplay = data.class || currentClass;
+    const classDisplay = currentClass;
     
     overlay.innerHTML = `
         <div class="driver-header">

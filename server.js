@@ -1089,6 +1089,7 @@ app.get(['/', '/ui'], async (req, res) => {
                     </li>
                 </ul>
             </div>
+            <a href="/stream-admin" style="position:fixed;bottom:12px;right:12px;width:30px;height:30px;min-width:30px;min-height:30px;border-radius:50%;background:#007BFF;padding:0;margin:0;" title="Stream Admin"></a>
         </body>
         </html>
     `;
