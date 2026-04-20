@@ -53,6 +53,61 @@
         .muted { color: #bcbcbc; font-size: 13px; }
         .error { color: #ff7070; margin-top: 8px; }
         .success { color: #7be07b; margin-top: 8px; }
+
+        /* Card header with 3-dot menu */
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+        .card-header h2 { margin: 0; }
+
+        .menu-wrap {
+            position: relative;
+        }
+        .menu-btn {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 20px;
+            line-height: 1;
+            padding: 4px 8px;
+            margin: 0;
+            width: auto;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .menu-btn:hover { background: #2e2e2e; color: #fff; }
+
+        .dropdown {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: calc(100% + 4px);
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            min-width: 180px;
+            z-index: 100;
+            overflow: hidden;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+        .dropdown.open { display: block; }
+        .dropdown button {
+            background: none;
+            border: none;
+            color: #f3f3f3;
+            text-align: left;
+            padding: 10px 14px;
+            margin: 0;
+            border-radius: 0;
+            font-size: 14px;
+            width: 100%;
+        }
+        .dropdown button:hover { background: #3a3a3a; }
+        .dropdown button.danger { color: #ff7070; }
+        .dropdown button.danger:hover { background: #3d1f1f; }
     </style>
 </head>
 <body>
@@ -72,9 +127,19 @@
 
     <div id="admin-card" class="hidden">
         <div class="card">
-            <h2>My Stream Overlay</h2>
+            <div class="card-header">
+                <h2>My Stream Overlay</h2>
+                <div class="menu-wrap">
+                    <button class="menu-btn" id="card-menu-btn" title="More options">⋮</button>
+                    <div class="dropdown" id="card-dropdown">
+                        <button id="rotate-key-btn" class="danger">Create New Key</button>
+                    </div>
+                </div>
+            </div>
+
             <label for="stream-url">My Stream URL</label>
             <input id="stream-url" class="mono" type="text" readonly>
+            <button id="copy-url-btn" class="secondary">Copy Stream URL</button>
             <div class="row">
                 <div>
                     <label for="region">Region</label>
@@ -89,15 +154,22 @@
             <input id="driver" type="text" placeholder="Driver name">
             <label for="override">Manual Text Override (optional)</label>
             <input id="override" type="text" placeholder="Text displayed in overlay instead of driver">
-            <button id="copy-url-btn" class="secondary">Copy Stream URL</button>
-            <button id="rotate-key-btn" class="secondary">Create New Key</button>
             <button id="create-btn">Save Changes</button>
             <button id="logout-btn" class="secondary">Logout</button>
             <div id="create-msg"></div>
         </div>
-
     </div>
 
     <script src="/stream-admin.js"></script>
+    <script>
+        // 3-dot menu toggle
+        const menuBtn = document.getElementById('card-menu-btn');
+        const dropdown = document.getElementById('card-dropdown');
+        menuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.toggle('open');
+        });
+        document.addEventListener('click', () => dropdown.classList.remove('open'));
+    </script>
 </body>
 </html>
