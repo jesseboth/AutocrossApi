@@ -62,7 +62,10 @@ async function loop() {
         }
     }
 
-    getResults(g_class).then(data => {
+    const requestedClass = g_class;
+    getResults(requestedClass).then(data => {
+
+        if (g_class !== requestedClass) return;
 
         g_data = data;
         log("Updates", data.updates)
@@ -78,6 +81,23 @@ async function loop() {
     }).catch(error => {
         console.error('Error fetching results:', error); // Handle any errors from `getResults`
     });
+}
+
+function clearGrid() {
+    for (let i = 1; i <= 10; i++) {
+        const gridItem = document.getElementById(i.toString());
+        if (!gridItem) continue;
+        gridItem.querySelector('.driver-row .position').textContent = i;
+        gridItem.querySelector('.driver-row .number').textContent = '';
+        const driverSpan = gridItem.querySelector('.driver-row .driver');
+        driverSpan.textContent = '';
+        driverSpan.style.color = 'white';
+        gridItem.querySelector('.car-row .index').textContent = '';
+        gridItem.querySelector('.car-row .car').textContent = '';
+        gridItem.querySelector('.pax-row .pax').textContent = '';
+        gridItem.querySelector('.offset-row .offset').textContent = '';
+        gridItem.querySelector('.times-row .times').innerHTML = '';
+    }
 }
 
 gridLock = false;
@@ -595,6 +615,7 @@ function toggleURL(add = "pax") {
 
     g_resultsPrev = undefined;
     g_resultsCur = {};
+    clearGrid();
     archive = pathParts[0] == "archive" ? true : false
     if (pathParts.includes(add)) {
         // Remove 'pax' from the path

@@ -399,7 +399,6 @@ let last_api_call = {};
 let last_params = {};
 // Store the timers for each region
 let region_timers = {};
-
 const RESET_TIMEOUT = 3600000;
 const TIMER_INTERVAL = 60000;
 const DNFTimes = ["DNF", "OFF", "DSQ", "RR"]
@@ -1637,6 +1636,13 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                     results[temp.class]["10"] = { ...temp }
                 }
                 if (widget) {
+                    if (stats[temp.driver] != undefined && stats[temp.driver].runs > runs) {
+                        // Run count decreased — new event started; reset stale stats and recent runs
+                        event_stats[uuid+region_name+cclass] = {};
+                        stats = event_stats[uuid+region_name+cclass];
+                        recent_runs[region_name] = [];
+                    }
+
                     if (stats[temp.driver] != undefined && stats[temp.driver].runs < runs) {
                         // Get the most recent time (last time in the array)
                         const lastTime = temp.times.length > 0 ? temp.times[temp.times.length - 1] : '';
