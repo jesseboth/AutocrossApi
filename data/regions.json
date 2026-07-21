@@ -33,7 +33,7 @@
   "MBR": {
     "url": "https://www.mbrscca.com/live/",
     "software": "pronto",
-    "archive": false,
+    "archive": true,
     "format": [
         [null, "position", "number", "driver", "car", null],
         [null, "index", null, "t",  "t", "t", null, "pax"],

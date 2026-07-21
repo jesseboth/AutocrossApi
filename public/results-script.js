@@ -23,6 +23,28 @@ let g_timeType = "Pax";
 let g_offsetType = "Prev";
 let g_paxIndex = {};
 let g_currentData = {};
+let g_isArchive = false;
+let g_isSeason = false;
+
+function loadSeasonScript() {
+    if (typeof window.loadSeasonView === 'function') {
+        return Promise.resolve();
+    }
+
+    if (window.__seasonScriptPromise) {
+        return window.__seasonScriptPromise;
+    }
+
+    window.__seasonScriptPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = '/season-script.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Unable to load season script'));
+        document.head.appendChild(script);
+    });
+
+    return window.__seasonScriptPromise;
+}
 
 // Wait for the DOM content to load
 document.addEventListener("DOMContentLoaded", function () {
@@ -43,6 +65,30 @@ document.addEventListener("DOMContentLoaded", function () {
     regionData = getRegion();
     region = regionData.region;
     tour = regionData.isTour;
+    g_isArchive = getPath()[0] === 'archive';
+    g_isSeason = isSeasonView();
+
+    if (g_isSeason) {
+        loadSeasonScript().then(() => {
+            document.getElementById("formContainer").style.display = "none";
+            document.getElementById("toggle-time").style.display = "none";
+            document.getElementById("toggle-offset").style.display = "none";
+            document.getElementById("button-container").style.display = "none";
+            document.title = `${regionData.regionName} Season Points`;
+            document.getElementById("region-header").innerHTML = `${regionData.regionName} Season Points`;
+            document.getElementById("header").innerHTML = `${regionData.regionName} Season Points`;
+            document.getElementById("updated").innerHTML = `Updated: ${new Date().toLocaleString()}`;
+            document.getElementById('results').innerHTML = "";
+            return loadSeasonView();
+        }).then(() => {
+            document.body.style.display = "block";
+        }).catch(error => {
+            console.error('Error fetching season data:', error);
+            document.getElementById('results').innerHTML = `<tr><td>Unable to load season points.</td></tr>`;
+            document.body.style.display = "block";
+        });
+        return;
+    }
 
     if (tour) {
         getEvents(region).then(events => {
@@ -195,6 +241,23 @@ function toggleURL(add = "pax") {
     // Get the current pathname without hash or query parameters
     let pathParts = url.pathname.split('/').filter(part => part !== ''); // Remove empty parts
     archive = pathParts[0] == "archive" ? true : false
+    if (g_isSeason || (pathParts[0] === 'archive' && pathParts[1] === 'ui' && (pathParts[4] || '').toLowerCase() === 'season')) {
+        const year = pathParts[2];
+        const archiveRegion = pathParts[3];
+        const currentFocus = (pathParts[5] || '').toUpperCase();
+        const nextFocus = String(add || '').toUpperCase();
+        const seasonPath = ['archive', 'ui', year, archiveRegion, 'season'];
+
+        if (nextFocus && nextFocus !== currentFocus) {
+            seasonPath.push(nextFocus);
+        }
+
+        url.pathname = '/' + seasonPath.join('/');
+        url.hash = '';
+        window.location.replace(url.toString());
+        return;
+    }
+
     if (pathParts.includes(add)) {
         // Remove 'pax' from the path
         pathParts.splice(pathParts.indexOf(add), 1);
@@ -227,6 +290,9 @@ function getClass(region) {
     regionTest = region.split("/")
     regionTest = regionTest[regionTest.length - 1]
     pathParts = getPath()
+    if (pathParts[0] === 'archive' && (pathParts[pathParts.length - 1] || '').toLowerCase() === 'season') {
+        return undefined;
+    }
     if (pathParts.join("/").toUpperCase().endsWith(regionTest)) {
         return undefined;
     }
@@ -280,6 +346,11 @@ function getRegion() {
     }
 }
 
+function isSeasonView() {
+    const pathParts = getPath();
+    return pathParts[0] === 'archive' && pathParts[1] === 'ui' && (pathParts[4] || '').toLowerCase() === 'season';
+}
+
 async function getData(path) {
     try {
         const response = await fetch(path);
@@ -328,7 +399,7 @@ function setClasses(cclass, classes, tour = false) {
 
                     // Create a new button element
                     const button = document.createElement('button');
-                    button.className = 'staggered-button';
+                    button.className = 'staggered-button button-blue';
                     button.innerHTML = label;
                     // Set an onclick handler that navigates to a specific location
                     button.onclick = () => toggleURL(label);
@@ -357,7 +428,7 @@ function setClasses(cclass, classes, tour = false) {
         classes.forEach(label => {
             // Create a new button element
             const button = document.createElement('button');
-            button.className = 'staggered-button';
+            button.className = 'staggered-button button-blue';
             button.innerHTML = label;
             // Set an onclick handler that navigates to a specific location
             button.onclick = () => toggleURL(label);

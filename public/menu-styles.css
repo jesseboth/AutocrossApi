@@ -122,3 +122,8 @@ a:hover {
   margin-left: 12%;
   width: 75%;
 }
+
+.season-link {
+  font-size: 18px;
+  font-weight: 700;
+}

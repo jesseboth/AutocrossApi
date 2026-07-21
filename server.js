@@ -693,6 +693,205 @@ app.get('/archive/ui/:b/:c?/:d?', async (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
 });
 
+function parseArchivePaxValue(value) {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function buildArchiveScoredRuns(entries, eventKey, eventIndex) {
+    const validEntries = entries
+        .map((entry) => ({
+            ...entry,
+            _paxValue: parseArchivePaxValue(entry?.pax),
+        }))
+        .filter((entry) => entry._paxValue !== null);
+
+    if (validEntries.length === 0) {
+        return [];
+    }
+
+    validEntries.sort((a, b) => a._paxValue - b._paxValue);
+    const winnerPax = validEntries[0]._paxValue;
+
+    return validEntries.map((entry, positionIndex) => {
+        const isWinner = Math.abs(entry._paxValue - winnerPax) < 1e-9;
+        const points = isWinner ? 101 : (100 * winnerPax / entry._paxValue);
+        return {
+            eventKey,
+            eventIndex,
+            driver: entry.driver,
+            className: entry.class || '',
+            position: entry.position || String(positionIndex + 1),
+            points: Number(points.toFixed(3)),
+        };
+    });
+}
+
+async function buildArchiveSeasonData(year, region) {
+    const archiveDir = path.join(__dirname, 'archive', region, year);
+
+    let files = [];
+    try {
+        files = (await fsp.readdir(archiveDir))
+            .filter((file) => file.endsWith('.json'))
+            .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    } catch (error) {
+        return null;
+    }
+
+    const events = [];
+    const overallRuns = [];
+    const classRuns = {};
+
+    files.forEach((file, eventIndex) => {
+        const eventKey = file.replace(/\.json$/i, '');
+        const eventData = getJsonData(path.join(archiveDir, file));
+        if (!eventData || typeof eventData !== 'object') {
+            return;
+        }
+
+        events.push({
+            key: eventKey,
+            label: eventKey.startsWith(`${region}_`) ? eventKey.slice(region.length + 1) : eventKey,
+        });
+
+        const overallEntries = [];
+        for (const [className, classData] of Object.entries(eventData)) {
+            const entries = Array.isArray(classData) ? classData : Object.values(classData || {});
+            const normalizedEntries = entries.map((entry) => ({
+                ...entry,
+                class: className,
+            }));
+
+            overallEntries.push(...normalizedEntries);
+
+            if (!classRuns[className]) {
+                classRuns[className] = [];
+            }
+            classRuns[className].push(...buildArchiveScoredRuns(normalizedEntries, eventKey, eventIndex));
+        }
+
+        overallRuns.push(...buildArchiveScoredRuns(overallEntries, eventKey, eventIndex));
+    });
+
+    return {
+        year,
+        region,
+        events,
+        overallRuns,
+        classRuns,
+        classes: Object.keys(classRuns),
+    };
+}
+
+function getSeasonKeepCount(eventCount) {
+    if (eventCount <= 4) {
+        return eventCount;
+    }
+    return Math.max(4, Math.round(eventCount * 0.63));
+}
+
+function buildSeasonStandingsRows(runs, eventCount, keepCount) {
+    const driverMap = new Map();
+
+    runs.forEach((run) => {
+        if (!run || !run.driver) {
+            return;
+        }
+
+        if (!driverMap.has(run.driver)) {
+            driverMap.set(run.driver, {
+                driver: run.driver,
+                scores: Array(eventCount).fill(null),
+            });
+        }
+
+        const row = driverMap.get(run.driver);
+        if (Number.isFinite(run.eventIndex) && run.eventIndex < eventCount) {
+            row.scores[run.eventIndex] = Number.isFinite(run.points) ? run.points : null;
+        }
+    });
+
+    const rows = Array.from(driverMap.values()).map((row) => {
+        const numericScores = row.scores.filter((value) => Number.isFinite(value));
+        const total = numericScores.reduce((sum, value) => sum + value, 0);
+        const countedTotal = [...numericScores]
+            .sort((a, b) => b - a)
+            .slice(0, keepCount)
+            .reduce((sum, value) => sum + value, 0);
+
+        return {
+            ...row,
+            total: Number(total.toFixed(3)),
+            countedTotal: Number(countedTotal.toFixed(3)),
+        };
+    });
+
+    rows.sort((a, b) => {
+        if (b.countedTotal !== a.countedTotal) {
+            return b.countedTotal - a.countedTotal;
+        }
+        if (b.total !== a.total) {
+            return b.total - a.total;
+        }
+        return a.driver.localeCompare(b.driver);
+    });
+
+    return rows;
+}
+
+async function handleArchiveSeasonRequest(req, res) {
+    const year = String(req.params.year || '').trim();
+    const region = String(req.params.region || '').trim().toUpperCase();
+    const cclass = String(req.params.cclass || '').trim().toUpperCase();
+
+    if (!year || !region) {
+        return res.status(400).send(errorCode('Year and region are required', false));
+    }
+
+    const seasonData = await buildArchiveSeasonData(year, region);
+    if (!seasonData) {
+        return res.status(404).send(errorCode('Season points not found', false));
+    }
+
+    if (req.path.startsWith('/archive/ui/')) {
+        return res.sendFile(path.join(__dirname, 'public', 'results-index.html'));
+    }
+
+    const eventCount = seasonData.events.length;
+    const keepCount = getSeasonKeepCount(eventCount);
+
+    if (!cclass) {
+        return res.json({
+            ...seasonData,
+            keepCount,
+            defaultKeepCount: keepCount,
+        });
+    }
+
+    const normalizedClass = cclass === 'PAX' ? 'PAX' : cclass;
+    const runs =
+        normalizedClass === 'PAX'
+            ? seasonData.overallRuns
+            : seasonData.classRuns[normalizedClass];
+
+    if (!runs || runs.length === 0) {
+        return res.status(404).send(errorCode('Season class not found', false));
+    }
+
+    return res.json({
+        year,
+        region,
+        className: normalizedClass,
+        events: seasonData.events,
+        keepCount,
+        defaultKeepCount: keepCount,
+        rows: buildSeasonStandingsRows(runs, eventCount, keepCount),
+    });
+}
+
+app.get(['/archive/:year/:region/season/:cclass?', '/archive/ui/:year/:region/season/:cclass?'], handleArchiveSeasonRequest);
+
 app.get('/fetch/:a/:b/:c?', async (req, res) => {
     const rawParts = [req.params.a, req.params.b, req.params.c].filter(Boolean);
     const parts = rawParts.map((part) => {
@@ -829,6 +1028,11 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
                 `;
 
                 html += `<ul id="${yearId}" class="file-list" style="display: none;">`;
+                html += `
+                    <li>
+                        <a class="season-link" style="width: 58%; min-width: 120px; background-color: #2d8cff; font-size: 18px; font-weight: 700;" href="/archive/ui/${year}/${dir}/season">Season</a>
+                    </li>
+                `;
                 let files = await fsp.readdir(`archive/${dir}/${year}`);
                 for (let file of files) {
                     if (file.includes(".json")) {
