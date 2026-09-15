@@ -371,6 +371,15 @@ const getJsonData = (filePath) => {
 };
 const regions = getJsonData('data/regions.json');
 
+async function readDirectoryNames(dirPath) {
+    try {
+        const entries = await fsp.readdir(dirPath, { withFileTypes: true });
+        return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    } catch (err) {
+        return null;
+    }
+}
+
 let paxIndex = {}
 fetchPaxIndex().then(classIndexDict => {
     paxIndex = classIndexDict;
@@ -1003,7 +1012,10 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
 
     try {
 
-        let dirs = await fsp.readdir("archive");
+        let dirs = await readDirectoryNames("archive");
+        if (!dirs) {
+            throw new Error('Failed to read archive root');
+        }
         for (let dir of dirs) {
             // Create a container for each directory
             const dirId = `dir-${dir.replace(/\s+/g, '-')}`; // Unique ID for each directory
@@ -1018,7 +1030,10 @@ app.get(['/archive', '/archive/ui' ], async (req, res) => {
             // Add a hidden unordered list to group the files under this directory
             html += `<ul id="${dirId}" class="file-list" style="display: none;">`;
 
-            let years = await fsp.readdir(`archive/${dir}`);
+            let years = await readDirectoryNames(`archive/${dir}`);
+            if (!years) {
+                continue;
+            }
             for (let year of years) {
                 const yearId = `${dirId}-${year.replace(/\s+/g, '-')}`;
                 html += `
@@ -1136,12 +1151,18 @@ app.get('/archive/search', async (req, res) => {
 
     try {
         // Get all regions
-        const regions = await fsp.readdir("archive");
+        const regions = await readDirectoryNames("archive");
+        if (!regions) {
+            throw new Error('Failed to read archive root');
+        }
 
         // Loop through each region
         for (const region of regions) {
             // Get all years for this region
-            const years = await fsp.readdir(`archive/${region}`);
+            const years = await readDirectoryNames(`archive/${region}`);
+            if (!years) {
+                continue;
+            }
 
             // Loop through each year
             for (const year of years) {
@@ -1454,9 +1475,15 @@ app.get('/archive/:year?/:a?/:b?/:c?', async (req, res) => {
         let dir = "archive/" + event_key.split("_")[0] + "/" + year;
         if (getEvents) {
             const events = new Set();
-            let dirs = await fsp.readdir("archive");
+            let dirs = await readDirectoryNames("archive");
+            if (!dirs) {
+                throw new Error('Failed to read archive root');
+            }
             for (const dir of dirs) {
-                const years = await fsp.readdir(`archive/${dir}`);
+                const years = await readDirectoryNames(`archive/${dir}`);
+                if (!years) {
+                    continue;
+                }
                 for (const y of years) {
                     const files = await fsp.readdir(`archive/${dir}/${y}`);
                     for (const file of files) {
@@ -2229,7 +2256,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                             temp.rawidx = bestIndex;
                         }
 
-                        if(widget && cclass == "RAW"){
+                    if(widget && cclass == "RAW"){
                             if (bestRawTime == Infinity) {
                                 // Time came from the RAW overall page into pax column — move it to raw
                                 temp.raw = temp.pax;
@@ -2346,30 +2373,91 @@ function getYesterdate() {
     return `${month}-${day}-${year}`;
 }
 
+function normalizeArchiveDate(value) {
+    const text = String(value || '').trim().replace(/[/.]/g, '-');
+
+    let match = text.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    if (match) {
+        return `${match[1]}-${match[2]}-${match[3].slice(2)}`;
+    }
+
+    match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+        return `${match[2]}-${match[3]}-${match[1].slice(2)}`;
+    }
+
+    return null;
+}
+
+function extractArchiveStamp(htmlContent, region) {
+    const fallback = `fixme-${getYesterdate()}`;
+
+    const liveGenerated = htmlContent.match(
+        /Live Results - Generated:\s*\w+ (\d{2}-\d{2}-\d{4}) \d{2}:\d{2}:\d{2}/i
+    );
+    if (liveGenerated) {
+        const normalized = normalizeArchiveDate(liveGenerated[1]);
+        if (normalized) {
+            return normalized;
+        }
+    }
+
+    if (region?.tour) {
+        const sportityPassword = htmlContent.match(/Sportity Event Password:\s*([A-Za-z0-9]+)/i);
+        if (sportityPassword) {
+            return sportityPassword[1];
+        }
+    }
+
+    if (region?.software === 'pronto') {
+        const text = cheerio.load(htmlContent).text();
+        const datePatterns = [
+            /(\d{2}[/-]\d{2}[/-]\d{4})/,
+            /(\d{4}[/-]\d{2}[/-]\d{2})/,
+        ];
+
+        for (const pattern of datePatterns) {
+            const match = text.match(pattern);
+            if (!match) {
+                continue;
+            }
+
+            const normalized = normalizeArchiveDate(match[1]);
+            if (normalized) {
+                return normalized;
+            }
+        }
+    }
+
+    return fallback;
+}
+
+function getArchiveYearDirFromStamp(date) {
+    const stamp = String(date || '').trim();
+
+    if (/^\d{2}-\d{2}-\d{2}$/.test(stamp)) {
+        return stamp.slice(6, 8);
+    }
+
+    if (/^\d{4}$/.test(stamp)) {
+        return stamp.slice(2);
+    }
+
+    const fixmeMatch = stamp.match(/^fixme-\d{2}-\d{2}-(\d{4})$/);
+    if (fixmeMatch) {
+        return fixmeMatch[1].slice(2);
+    }
+
+    return '';
+}
+
 async function archiveJson(name, region) {
     try {
         const response = await axios.get(region.url);
         const htmlContent = response.data;
 
-        date = "fixme-" + getYesterdate();
-        const regex = /Live Results - Generated:\s*\w+ (\d{2}-\d{2}-\d{4}) \d{2}:\d{2}:\d{2}/;
-        match = htmlContent.match(regex);
-        let yeardir = ""
-
-        if (match) {
-            const [month, day, year] = match[1].split('-');
-            const formattedYear = year.slice(2);
-            date = `${month}-${day}-${formattedYear}`;
-            yeardir = formattedYear;
-        }
-        else if (region.tour) {
-            const regex = /Sportity Event Password:\s*([A-Za-z0-9]+)/;
-            match = htmlContent.match(regex);
-            date = match ? match[1] : date;
-            year = date.slice(0, 2);
-            yeardir = year;
-
-        }
+        let date = extractArchiveStamp(htmlContent, region);
+        let yeardir = getArchiveYearDirFromStamp(date);
 
         const filepath = `archive/${name}/${yeardir}/`;
         fs.mkdir(filepath, { recursive: true }, (err) => {
