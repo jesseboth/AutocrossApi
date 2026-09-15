@@ -1222,6 +1222,7 @@ app.get(['/', '/ui'], async (req, res) => {
         <html lang="en">
         <head>
             <meta charset="UTF-8">
+            <title>Autocross API</title>
             <link rel="manifest" href="/fetch/data/manifest.json">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="stylesheet" href="/menu-styles.css">
@@ -3035,6 +3036,22 @@ async function getRedirect(url, region = undefined, timeout = 5000) {
 }
 
 
+// Splits a PAX table cell into every class code it lists, for example
+// "AST(STR)" becomes ["AST", "STR"] and "CAM-T" becomes ["CAMT"].
+function classNames(cellText) {
+    const names = [];
+    const primary = cellText.split("(")[0];
+    const aliases = cellText.includes("(") ? cellText.split("(")[1].split(")")[0] : "";
+
+    for (const part of [primary, ...aliases.split(/[/,]/)]) {
+        const name = part.replace(/[-\s]/g, "").toUpperCase();
+        if (name && !names.includes(name)) {
+            names.push(name);
+        }
+    }
+    return names;
+}
+
 async function fetchPaxIndex() {
     try {
         const url = "https://www.solotime.info/pax/";
@@ -3057,11 +3074,11 @@ async function fetchPaxIndex() {
 
             // Iterate over the cells and extract pairs of class and index
             for (let i = 0; i < cells.length; i += 1) {
-                let carClass = $(cells[i]).text().trim(); // Get class from the current cell
-                if(carClass == ""){
+                const cellText = $(cells[i]).text().trim(); // Get class from the current cell
+                if(cellText == ""){
                     continue;
                 }
-                carClass = carClass.split("(")[0].trim();
+                const carClasses = classNames(cellText);
                 i++;
 
                 let indexValue = ""
@@ -3073,9 +3090,14 @@ async function fetchPaxIndex() {
                 }
 
                 // Check if both class and index are valid and a number before adding them
-                if (carClass && indexValue && !isNaN(parseFloat(indexValue))) {
-                    carClass = carClass.replace(/-/g, "");
-                    classIndexDict[carClass] = parseFloat(indexValue); // Add to dictionary
+                if (carClasses.length > 0 && indexValue && !isNaN(parseFloat(indexValue))) {
+                    for (const name of carClasses) {
+                        classIndexDict[name] = parseFloat(indexValue);
+                        // Ladies classes share the index of the class they are based on
+                        if (!classIndexDict.hasOwnProperty(name + "L")) {
+                            classIndexDict[name + "L"] = parseFloat(indexValue);
+                        }
+                    }
                 }
             }
         }

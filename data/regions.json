@@ -44,6 +44,18 @@
     "data": { "element":"table", "offset": 1, "classes_offset": 2  },
     "pax": [["position", "class", "index", "number", "driver", "car", "pax"]]
   },
+  "NEPA": {
+    "url": "https://nepa.prontolivetiming.com/",
+    "software": "pronto",
+    "archive": false,
+    "format": [
+        [null, "position", "number", "driver", "car", null, null, null, null],
+        [null, "index", null, "t", "t", "t", "t", "t", "t", "t", "pax"],
+        [null, null, null, null, null, null, null, null, null, null, "offset"]
+    ],
+    "data": { "element":"table", "offset": 1, "classes_offset": 2 },
+    "pax": [["position", "index", null, "number", "driver", "car", "pax"]]
+  },
   "TOUR": {
     "url": "https://sololive.scca.com/",
     "software": "pronto",
