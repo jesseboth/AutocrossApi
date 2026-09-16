@@ -156,7 +156,7 @@ async function checkConfigUpdates() {
 // Fetch data from the API
 async function fetchData() {
     try {
-        const response = await fetch(`/${region}/${currentClass}`);
+        const response = await fetch(`/${region}/${currentClass}`, { cache: 'no-store' });
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);

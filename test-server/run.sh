@@ -1,8 +1,8 @@
 #!/bin/bash
 
-PORT=6969
+PORT="${TEST_PORT:-6969}"
 
-echo "Running test server on http://localhost:$PORT"
+echo "Running test live event on http://localhost:$PORT/debug/live.html"
 echo "Press Ctrl+C to stop the server"
 
-python3 -m http.server $PORT
+TEST_PORT=$PORT node "$(dirname "$0")/index.js"

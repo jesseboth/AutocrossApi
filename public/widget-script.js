@@ -100,19 +100,35 @@ function clearGrid() {
     }
 }
 
+// "DNS", "No Time" and an empty cell all mean there is nothing to show or compare
+function hasTime(value) {
+    return value !== undefined && value !== null && String(value).trim() !== '' && Number.isFinite(parseFloat(value));
+}
+
 gridLock = false;
 async function populateGrid(data) {
 
     i = 0;
     while(gridLock) {
-        await sleep(10000);
+        await sleep(100);
         i++;
-        if(i > 100) {
+        if(i > 50) {
             return;
         }
     }
     gridLock = true;
 
+    // A render failure must not stop the next refresh from drawing the grid
+    try {
+        renderGrid(data);
+    } catch (error) {
+        console.error('Error rendering grid:', error);
+    } finally {
+        gridLock = false;
+    }
+}
+
+function renderGrid(data) {
     log("Populating grid with data:", data);
 
     const gridContainer = document.querySelector('.grid-container');
@@ -208,19 +224,19 @@ async function populateGrid(data) {
 
             if (!showRaw && g_offsetType == "Prev") {
                 paxSpan.textContent = data[position].pax || '';
-                if (position != "1" && data[position].pax != "" && data[position].pax != "DNS") {
-                    offsetSpan.textContent = "+"+data[position].offset || '';
+                if (position != "1" && hasTime(data[position].pax) && hasTime(data[position].offset)) {
+                    offsetSpan.textContent = "+" + data[position].offset;
                 }
                 else {
                     offsetSpan.textContent = data[position].offset || '';
                 }
             }
             else if (!showRaw && g_offsetType == "First") {
-                if (position == "1" && data[position].pax != "" && data[position].pax != "DNS") {
+                if (position == "1" && hasTime(data[position].pax)) {
                     paxSpan.textContent = data[position].pax || '';
                     offsetSpan.textContent = data[position].offset || '';
                 }
-                else if (data[position].pax != "" && data[position].pax != "DNS" && data["1"].pax != "") {
+                else if (hasTime(data[position].pax) && hasTime(data["1"].pax)) {
                     paxSpan.textContent = data[position].pax || '';
                     offsetSpan.textContent = "+" + (data[position].pax - data["1"].pax).toFixed(3) || '';
                 }
@@ -230,17 +246,20 @@ async function populateGrid(data) {
                 }
             }
             else if (showRaw && g_offsetType == "Prev") {
-                if (position == "1" && data[position].raw != "" && data[position].pax != "DNS") {
+                if (position == "1" && hasTime(data[position].raw)) {
                     paxSpan.textContent = data[position].raw || '';
                     offsetSpan.textContent = data[position].offset || '';
                 }
-                else if (data[position].raw != "" && data[position].pax != "DNS" && data["1"].pax != "") {
+                else if (hasTime(data[position].raw) && hasTime(data["1"].raw)) {
                     paxSpan.textContent = data[position].raw || '';
 
                     const prevPosition = String(parseInt(position)-1);
 
                     // Use paxIndex to calculate the offset if available
-                    if (g_paxIndex && data[position].index && data[prevPosition].index) {
+                    if (!hasTime(data[prevPosition]?.raw)) {
+                        offsetSpan.textContent = '';
+                    }
+                    else if (g_paxIndex && data[position].index && data[prevPosition].index) {
                         // Get the PAX index for current and previous positions
                         const currIndex = parseFloat(g_paxIndex[data[position].index]) || 1;
                         const prevIndex = parseFloat(g_paxIndex[data[prevPosition].index]) || 1;
@@ -272,11 +291,11 @@ async function populateGrid(data) {
                 }
             }
             else if (showRaw && g_offsetType == "First") {
-                if (position == "1" && data[position].raw != "" && data[position].pax != "DNS") {
+                if (position == "1" && hasTime(data[position].raw)) {
                     paxSpan.textContent = data[position].raw || '';
                     offsetSpan.textContent = data[position].offset || '';
                 }
-                else if (data[position].raw != "" && data[position].pax != "DNS" && data["1"].pax != "") {
+                else if (hasTime(data[position].raw) && hasTime(data["1"].raw)) {
                     paxSpan.textContent = data[position].raw || '';
 
                     // Use paxIndex to calculate the offset if available
@@ -353,7 +372,6 @@ async function populateGrid(data) {
             }
         }
     }
-    gridLock = false;
 }
 
 // Function to fetch recent drivers from the server
@@ -710,6 +728,7 @@ async function getData(path) {
         // Include machine ID in the request headers
         const machineId = getMachineId();
         const response = await fetch(path, {
+            cache: 'no-store',
             headers: {
                 'X-Machine-ID': machineId
             }

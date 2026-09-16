@@ -353,7 +353,7 @@ function isSeasonView() {
 
 async function getData(path) {
     try {
-        const response = await fetch(path);
+        const response = await fetch(path, { cache: 'no-store' });
         const data = await response.json();
         console.log('Data fetched successfully:', data);
         return data; // Data is returned here

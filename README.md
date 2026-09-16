@@ -69,6 +69,30 @@ To add a new region to the API:
 - Ensure that the **region keys** are specified in **all uppercase** (e.g., `CNY`, `FLR`).
 - Update the necessary configuration files to include the new region.
 
+### 5. Debug Mode
+
+`npm run debug` starts the server with a simulated live event, for work that needs
+results which change while you watch them.
+
+- The test region is `TEST`. Its live page is at `/debug/live.html` and it uses the
+  same AXWare format as the other axware regions.
+- A driver gets one more run every 10 seconds, with the odd cone penalty and off
+  course, until every driver has 8 runs. Set `TEST_INTERVAL_MS` for a different rate.
+- Open the results page at `/ui/TEST/` or the widget at `/widgetui/TEST/`.
+
+| Route | Result |
+|---|---|
+| `/debug/live.html` | the simulated AXWare page |
+| `/debug/status` | the event state as JSON |
+| `/debug/tick/:count` | adds runs immediately, without waiting |
+| `/debug/reset` | empties the event to replay it from the first run |
+
+The region and all of these routes exist only in debug mode. Without `DEBUG`, the
+region is absent from `/regions` and the routes return `Region not found`.
+
+`npm run test-server` runs the simulated event on its own, on port 6969, to point
+another tool at the page.
+
 ## API Endpoints
 
 ### 1. Real-Time Event Data

@@ -410,15 +410,43 @@ let last_params = {};
 let region_timers = {};
 const RESET_TIMEOUT = 3600000;
 const TIMER_INTERVAL = 60000;
+// Timing sites sit behind page caches that hand back an older copy of a live
+// page, so every scrape asks for a fresh one
+const NO_CACHE_HEADERS = { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' };
+
+function noCacheUrl(url) {
+    return url + (url.includes('?') ? '&' : '?') + '_=' + Date.now();
+}
+
+function fetchLive(url, config = {}) {
+    return axios.get(noCacheUrl(url), {
+        ...config,
+        headers: { ...NO_CACHE_HEADERS, ...(config.headers || {}) }
+    });
+}
+
 const DNFTimes = ["DNF", "OFF", "DSQ", "RR"]
 const DNSTimes = ["DNS", "NO TIME"]
 
 reset_stats();
 
+// Builds the key that identifies one viewer's refresh session
+function timerKey(region_name, cclass, widget, uuid) {
+    return [region_name, cclass, widget ? "widget" : "ui", uuid || "default"].join("|");
+}
+
 // Function to start a timer for a region
-function startRegionTimer(region_name, region_dict, cclass, widget, user_driver, uuid, software) {
-    // Store the parameters for this region
-    last_params[region_name] = {
+function startRegionTimer(region_name, region_dict, cclass, widget, user_driver, uuid, software, background = false) {
+    const key = timerKey(region_name, cclass, widget, uuid);
+
+    // Only a request from a client opens a session or keeps one alive, so a
+    // background refresh must not reach the rest of this function
+    if (background) {
+        return;
+    }
+
+    last_params[key] = {
+        region_name,
         region_dict,
         cclass,
         widget,
@@ -427,39 +455,42 @@ function startRegionTimer(region_name, region_dict, cclass, widget, user_driver,
         software
     };
 
-    // Clear any existing timer for this region
-    if (region_timers[region_name]) {
-        clearInterval(region_timers[region_name].timer);
+    // A request from the client marks the session as still being watched
+    if (region_timers[key]) {
+        region_timers[key].lastRequest = Date.now();
+        return;
     }
 
-    // Set the start time
-    const startTime = Date.now();
-
-    // Create a new timer
     const timer = setInterval(() => {
-        const currentTime = Date.now();
+        const session = region_timers[key];
 
-        // If it's been more than an hour since the timer started, stop it
-        if (currentTime - startTime > RESET_TIMEOUT) {
+        // Stop refreshing once nothing has asked for this region for an hour
+        if (!session || Date.now() - session.lastRequest > RESET_TIMEOUT) {
             clearInterval(timer);
-            delete region_timers[region_name];
+            delete region_timers[key];
+            delete last_params[key];
             return;
         }
 
-        // Call the appropriate function with the stored parameters
+        const params = last_params[key];
+        if (!params) {
+            clearInterval(timer);
+            delete region_timers[key];
+            return;
+        }
+
         if (software === 'axware') {
-            axware(region_name, region_dict, cclass, widget, user_driver, uuid)
+            axware(region_name, params.region_dict, cclass, widget, params.user_driver, uuid, true)
                 .catch(error => console.error(`Error refreshing axware data for ${region_name}:`, error));
         } else if (software === 'pronto') {
-            pronto(region_name, region_dict, cclass, widget, user_driver, uuid)
+            pronto(region_name, params.region_dict, cclass, widget, params.user_driver, uuid, true)
                 .catch(error => console.error(`Error refreshing pronto data for ${region_name}:`, error));
         }
     }, TIMER_INTERVAL);
 
-    // Store the timer and start time
-    region_timers[region_name] = {
+    region_timers[key] = {
         timer,
-        startTime
+        lastRequest: Date.now()
     };
 }
 
@@ -469,6 +500,18 @@ cron.schedule('30 2 * * 0', () => {
 });
 
 app.use(express.static('public')); // Serve static files from the public directory
+
+// The test region and its simulated live page only exist in debug mode
+if (DEBUG) {
+    const { createDebugRouter } = require('./test-server');
+    app.use('/debug', createDebugRouter({ intervalMs: Number(process.env.TEST_INTERVAL_MS) || 10000 }));
+
+    const debugRegions = getJsonData('data/debug-regions.json');
+    for (const name of Object.keys(debugRegions)) {
+        regions[name] = { ...debugRegions[name], url: `http://127.0.0.1:${PORT}${debugRegions[name].url}` };
+    }
+    console.log(`Debug regions: ${Object.keys(debugRegions).join(", ")} (live page at /debug/live.html)`);
+}
 
 // Set up a route to serve the HTML file
 app.get('/ui/:b/:c?/:d?', (req, res) => {
@@ -1718,7 +1761,7 @@ app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
 
-async function axware(region_name, region, cclass, widget = false, user_driver = undefined, uuid = undefined) {
+async function axware(region_name, region, cclass, widget = false, user_driver = undefined, uuid = undefined, background = false) {
     // Update the last API call time
     const currentTime = Date.now();
     last_api_call[region_name] = currentTime;
@@ -1729,7 +1772,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
     }
 
     // Start or reset the timer for this region
-    startRegionTimer(region_name, region, cclass, widget, user_driver, uuid, 'axware');
+    startRegionTimer(region_name, region, cclass, widget, user_driver, uuid, 'axware', background);
 
     const url = region.url;
 
@@ -1747,7 +1790,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
     }
 
     try {
-        const { data } = await axios.get(url);
+        const { data } = await fetchLive(url);
         const $ = cheerio.load(data);
         const liveElements = $(region.data.element);
         const targetElement = liveElements.eq(region.data.offset);
@@ -1849,7 +1892,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                 const runs = temp.times.length;
                 const bestIndex = findBestTimeIndex(temp.times)
                 const bestRawTime = convertToSeconds(temp.times[bestIndex]);
-                temp.raw = String(bestRawTime.toFixed(3));
+                temp.raw = Number.isFinite(bestRawTime) ? String(bestRawTime.toFixed(3)) : "No Time";
                 if(bestIndex > 0 && bestRawTime == convertToSeconds(temp.pax) && paxIndex[temp.index] != undefined){
                     temp.pax = String((bestRawTime * paxIndex[temp.index]).toFixed(3));
                 }
@@ -1864,7 +1907,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
                 }
                 else if (temp.driver.toLowerCase() == user_driver) {
                     // put me in 10th if I am outisde top 10
-                    temp.offset = temp.pax - results[temp.class]["9"].pax;
+                    temp.offset = timeGap(temp.pax, results[temp.class]["9"].pax);
                     results[temp.class]["10"] = { ...temp }
                 }
                 if (widget) {
@@ -1942,7 +1985,7 @@ async function axware(region_name, region, cclass, widget = false, user_driver =
     }
 }
 
-async function pronto(region_name, region, cclass, widget = false, user_driver = undefined, uuid = undefined) {
+async function pronto(region_name, region, cclass, widget = false, user_driver = undefined, uuid = undefined, background = false) {
     // Update the last API call time
     const currentTime = Date.now();
     last_api_call[region_name] = currentTime;
@@ -1953,7 +1996,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
     }
 
     // Start or reset the timer for this region
-    startRegionTimer(region_name, region, cclass, widget, user_driver, uuid, 'pronto');
+    startRegionTimer(region_name, region, cclass, widget, user_driver, uuid, 'pronto', background);
 
     let classes = [cclass];
     let backup = [];
@@ -2056,7 +2099,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
 
             console.log(url)
 
-            const { data } = await axios.get(url);
+            const { data } = await fetchLive(url);
             const $ = cheerio.load(data);
             const liveElements = $(region.data.element);
             const targetElement = liveElements.eq(region.data.offset);
@@ -2167,8 +2210,14 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                 if (valid && eligibleName(temp.driver, eligible)) {
                     const store = temp.class;
                     temp.class = currentClass;
+
+                    // An empty index column means the driver is indexed on their own
+                    // class, which the PAX and RAW pages list in a column of their own
                     if (temp.index == undefined || temp.index.trim() == "-") {
-                        temp.index = currentClass.toUpperCase();
+                        const fallback = store != undefined && String(store).trim() != "" && String(store).trim() != "-"
+                            ? String(store)
+                            : currentClass;
+                        temp.index = fallback.toUpperCase();
                     } else {
                         temp.index = temp.index.toUpperCase();
                     }
@@ -2291,7 +2340,7 @@ async function pronto(region_name, region, cclass, widget = false, user_driver =
                     }
                     else if (temp.driver.toLowerCase() == user_driver) {
                         // put me in 10th if I am outisde top 10
-                        temp.offset = temp.pax - results[temp.class]["9"].pax;
+                        temp.offset = timeGap(temp.pax, results[temp.class]["9"].pax);
                         results[temp.class]["10"] = { ...temp }
                         results[temp.class]["10"].class = store;
                     }
@@ -2454,7 +2503,7 @@ function getArchiveYearDirFromStamp(date) {
 
 async function archiveJson(name, region) {
     try {
-        const response = await axios.get(region.url);
+        const response = await fetchLive(region.url);
         const htmlContent = response.data;
 
         let date = extractArchiveStamp(htmlContent, region);
@@ -2470,10 +2519,10 @@ async function archiveJson(name, region) {
         const filename = filepath + `${name}_${date}.json`;
         let content = {};
         if (region.software == "axware") {
-            content = await axware(name, region, undefined, false);
+            content = await axware(name, region, undefined, false, undefined, undefined, true);
         }
         else if (region.software == "pronto") {
-            content = await pronto(name, region, undefined, false);
+            content = await pronto(name, region, undefined, false, undefined, undefined, true);
         }
         else {
             console.error("Software not defined: ", region.software, "Can not archive");
@@ -2493,6 +2542,16 @@ function toTitleCase(str) {
     return str.toLowerCase().split(' ').map(function (word) {
         return word.charAt(0).toUpperCase() + word.slice(1);
     }).join(' ');
+}
+
+// An offset is only meaningful between two numeric times
+function timeGap(time, compare) {
+    const first = parseFloat(time);
+    const second = parseFloat(compare);
+    if (!Number.isFinite(first) || !Number.isFinite(second)) {
+        return "-";
+    }
+    return (first - second).toFixed(3);
 }
 
 function simplifyTime(_string) {
@@ -2591,9 +2650,9 @@ function reset_stats() {
     last_params = {};
 
     // Clear all active timers
-    for (const region in region_timers) {
-        if (region_timers[region] && region_timers[region].timer) {
-            clearInterval(region_timers[region].timer);
+    for (const key in region_timers) {
+        if (region_timers[key] && region_timers[key].timer) {
+            clearInterval(region_timers[key].timer);
         }
     }
     region_timers = {};
@@ -2603,6 +2662,13 @@ function reset_stats() {
 function updateRecentRuns(region, driverName, driverNumber, runCount, lastTime) {
     if (!recent_runs[region]) {
         recent_runs[region] = [];
+    }
+
+    // Several viewers report the same run, so only record it once
+    const known = recent_runs[region].some(entry =>
+        entry.driver === driverName && entry.runs === runCount && entry.time === (lastTime || ''));
+    if (known) {
+        return;
     }
 
     // Add the driver to the beginning of the array
@@ -2652,15 +2718,7 @@ function pax(results, widget, stats, user_driver = undefined) {
     for (let i = 0; i < flattenedData.length; i++) {
         flattenedData[i].position = (i + 1).toString();
         if (i > 0) {
-            const paxA = parseFloat(flattenedData[i - 1].pax);
-            const paxB = parseFloat(flattenedData[i].pax);
-
-            if (isNaN(paxB)) {
-                flattenedData[i].offset = "-";
-            }
-            else {
-                flattenedData[i].offset = ((paxB - paxA).toFixed(3)).toString();
-            }
+            flattenedData[i].offset = timeGap(flattenedData[i].pax, flattenedData[i - 1].pax);
         }
 
         if (widget) {
@@ -2671,7 +2729,7 @@ function pax(results, widget, stats, user_driver = undefined) {
                 ret[(i + 1).toString()] = flattenedData[i];
             }
             else if ((flattenedData[i].driver || "").toLowerCase() == user_driver) {
-                flattenedData[i].offset = (flattenedData[i].pax - ret["9"].pax).toFixed(3);
+                flattenedData[i].offset = timeGap(flattenedData[i].pax, ret["9"].pax);
                 ret["10"] = flattenedData[i];
             }
 
@@ -2735,20 +2793,19 @@ function raw(results, widget, stats, user_driver = undefined) {
     let ret = {}
 
     const flattenedData = flatten(results)
+
+    // The RAW view reports the best raw time in the time column
+    flattenedData.forEach(entry => {
+        const best = convertToSeconds(entry.times[findBestTimeIndex(entry.times)]);
+        entry.pax = Number.isFinite(best) ? best.toFixed(3) : "No Time";
+    });
+
     rawSort(flattenedData);
 
     for (let i = 0; i < flattenedData.length; i++) {
         flattenedData[i].position = (i + 1).toString();
         if (i > 0) {
-            const paxA = parseFloat(flattenedData[i - 1].pax);
-            const paxB = parseFloat(flattenedData[i].pax);
-
-            if (isNaN(paxB)) {
-                flattenedData[i].offset = "-";
-            }
-            else {
-                flattenedData[i].offset = ((paxB - paxA).toFixed(3)).toString();
-            }
+            flattenedData[i].offset = timeGap(flattenedData[i].pax, flattenedData[i - 1].pax);
         }
 
         if (widget) {
@@ -2761,7 +2818,7 @@ function raw(results, widget, stats, user_driver = undefined) {
                 ret[(i + 1).toString()] = flattenedData[i];
             }
             else if ((flattenedData[i].driver || "").toLowerCase() == user_driver) {
-                flattenedData[i].offset = flattenedData[i].pax - ret["9"].pax;
+                flattenedData[i].offset = timeGap(flattenedData[i].pax, ret["9"].pax);
                 ret["10"] = flattenedData[i];
             }
 
@@ -2777,56 +2834,28 @@ function raw(results, widget, stats, user_driver = undefined) {
 // Custom sort function to handle numeric and non-numeric 'pax' values
 function rawSort(data) {
     return data.sort((a, b) => {
-        let stringA = convertToSeconds(a.times[findBestTimeIndex(a.times)]);
-        let stringB = convertToSeconds(b.times[findBestTimeIndex(b.times)]);
-        a.pax = stringA;
-        b.pax = stringB;
+        const rawA = convertToSeconds(a.times[findBestTimeIndex(a.times)]);
+        const rawB = convertToSeconds(b.times[findBestTimeIndex(b.times)]);
 
-        if (DNFTimes.includes(stringA)) {
-            stringA = "DNF";
-        }
-        if (DNFTimes.includes(stringB)) {
-            stringB = "DNF";
-        }
-
-        if (DNSTimes.includes(stringA)) {
-            stringA = "DNS";
-        }
-        if (DNSTimes.includes(stringB)) {
-            stringB = "DNS";
-        }
-
-        if (stringA == "DNS" && stringB == "DNS") {
+        // Drivers without a time go to the end
+        if (!Number.isFinite(rawA) && !Number.isFinite(rawB)) {
             return 0;
         }
-        else if (stringA == "DNS") {
+        if (!Number.isFinite(rawA)) {
             return 1;
         }
-        else if (stringB == "DNS") {
+        if (!Number.isFinite(rawB)) {
             return -1;
         }
-        else
 
-            if (stringA == "DNF" && stringB == "DNF") {
-                return 0;
-            }
-            else if (stringA == "DNF") {
-                return 1;
-            }
-            else if (stringB == "DNF") {
-                return -1;
-            }
-            const rawA = parseFloat(stringA);
-            const rawB = parseFloat(stringB);
-
-        return rawA - rawB; // Both are numeric, sort in ascending order
+        return rawA - rawB;
     });
 }
 
 // Function to check if a URL exists and return a boolean
 async function checkUrlExists(url) {
     try {
-        const response = await axios.head(url);
+        const response = await axios.head(noCacheUrl(url), { headers: NO_CACHE_HEADERS });
         if (response.status === 200) {
             return true;
         }
@@ -2839,7 +2868,7 @@ async function checkUrlExists(url) {
 async function getProntoClasses(url, offset, only=false) {
     try {
         // Fetch the HTML from the URL
-        const { data: html } = await axios.get(url);
+        const { data: html } = await fetchLive(url);
 
         // Load the HTML into Cheerio
         const $ = cheerio.load(html);
@@ -2888,7 +2917,7 @@ async function getProntoClasses(url, offset, only=false) {
 async function fetchProntoRunTicker(baseUrl) {
     try {
         // Fetch the main index page
-        const { data: html } = await axios.get(baseUrl + 'index.php');
+        const { data: html } = await fetchLive(baseUrl + 'index.php');
 
         // Load the HTML into Cheerio
         const $ = cheerio.load(html);
@@ -2997,7 +3026,7 @@ function errorCode(error, widget, type = "string", res = undefined) {
 
 async function getRedirectURL(url, timeout = 5000) {
     try {
-        const response = await axios.get(url, { timeout });
+        const response = await fetchLive(url, { timeout });
         const redirectMatch = response.data.match(/location\.href\s*=\s*['"]([^'"]+)['"]/);
         if (redirectMatch && redirectMatch[1]) {
             return new URL(redirectMatch[1], url).href;
@@ -3011,7 +3040,7 @@ async function getRedirectURL(url, timeout = 5000) {
 
 async function getRedirect(url, region = undefined, timeout = 5000) {
     try {
-        const response = await axios.get(url, { timeout });
+        const response = await fetchLive(url, { timeout });
 
         const redirectMatch = response.data.match(/location\.href\s*=\s*['"]([^'"]+)['"]/);
 
@@ -3112,7 +3141,7 @@ async function fetchPaxIndex() {
 
 async function fetchEventCodes(url) {
     try {
-      const response = await axios.get(url);
+      const response = await fetchLive(url);
       const $ = cheerio.load(response.data);
 
       const eventCodes = [];
